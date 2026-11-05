@@ -28,9 +28,12 @@ jobs:
           cache: true
 
       - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.DEBUG_KEYSTORE }}
         run: |
           mkdir -p ~/.android
-          echo "${{ secrets.DEBUG_KEYSTORE }}" | base64 -d > ~/.android/debug.keystore
+          # Uploaded from Windows the secret may end in a CR; base64 rejects any whitespace.
+          printf '%s' "$KEYSTORE" | tr -d '\r\n\t ' | base64 -d > ~/.android/debug.keystore
 
       - run: flutter pub get
       - run: flutter test
