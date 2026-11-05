@@ -29,6 +29,13 @@ android {
         versionName = flutter.versionName
     }
 
+    // The pipeline hands over the same key as the local builds, so its APKs install as updates.
+    signingConfigs {
+        getByName("debug") {
+            System.getenv("GLAS_KEYSTORE")?.let { storeFile = file(it) }
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.

@@ -31,9 +31,11 @@ jobs:
         env:
           KEYSTORE: ${{ secrets.DEBUG_KEYSTORE }}
         run: |
-          mkdir -p ~/.android
           # Uploaded from Windows the secret may end in a CR; base64 rejects any whitespace.
-          printf '%s' "$KEYSTORE" | tr -d '\r\n\t ' | base64 -d > ~/.android/debug.keystore
+          printf '%s' "$KEYSTORE" | tr -d '\r\n\t ' | base64 -d > "$RUNNER_TEMP/glas.keystore"
+          echo "GLAS_KEYSTORE=$RUNNER_TEMP/glas.keystore" >> "$GITHUB_ENV"
+          # Must read FE:60:23:48 like the local builds, or the phone refuses the update.
+          keytool -list -v -keystore "$RUNNER_TEMP/glas.keystore" -storepass android | grep -m1 SHA256
 
       - run: flutter pub get
       - run: flutter test
