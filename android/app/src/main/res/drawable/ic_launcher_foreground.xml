@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Glas launcher icon, foreground: a frosted glass pane with a bright rim and a sheen. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#40FFFFFF"
+        android:strokeColor="#E6FFFFFF" android:strokeWidth="1.6"
+        android:pathData="M42,32 L66,32 A10,10 0 0 1 76,42 L76,66 A10,10 0 0 1 66,76 L42,76 A10,10 0 0 1 32,66 L32,42 A10,10 0 0 1 42,32 Z"/>
+    <path android:fillColor="#59FFFFFF"
+        android:pathData="M38,34 L52,34 L34,58 L34,40 A6,6 0 0 1 38,34 Z"/>
+    <path android:fillColor="#33FFFFFF"
+        android:pathData="M58,34 L64,34 L36,72 L34,72 L34,66 Z"/>
+</vector>
