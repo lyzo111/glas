@@ -143,7 +143,10 @@ class AppWidgetList extends StatefulWidget {
   State<AppWidgetList> createState() => _AppWidgetListState();
 }
 
-class _AppWidgetListState extends State<AppWidgetList> {
+class _AppWidgetListState extends State<AppWidgetList> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   /// Providers by app, in the order of the apps' names; null while loading.
   List<List<WidgetProvider>>? _apps;
 
@@ -167,6 +170,7 @@ class _AppWidgetListState extends State<AppWidgetList> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final p = Ios.of(context);
     final apps = _apps;
     return Column(

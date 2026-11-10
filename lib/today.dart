@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'appwidgets.dart';
 import 'glass.dart';
 import 'layout.dart';
 import 'state.dart';
 import 'widgets.dart';
+
+/// How a widget of another app is kept in the Today view: "app:size:host id:provider:app name".
+String todayAppEntry(WidgetSize size, int hostId, WidgetProvider provider) => 'app:${size.name}:$hostId:${provider.id}:${provider.app}';
 
 /// The iOS Today view left of the first page: the widgets the user picks, laid out on the
 /// grid of the home screen, so two small ones share a row.
@@ -27,57 +31,83 @@ class _TodayViewState extends State<TodayView> {
 
   List<String> get _today => widget.state.settings.today;
 
-  /// Entries whose kind or size no longer exists are skipped.
-  (WidgetKind, WidgetSize)? _parse(String entry) {
-    final parts = entry.split(':');
-    final kind = WidgetKind.values.asNameMap()[parts.first];
-    if (kind == null || !kind.builtIn) return null;
-    final size = WidgetSize.values.asNameMap()[parts.length > 1 ? parts[1] : ''];
-    return (kind, size != null && kind.sizes.contains(size) ? size : kind.sizes.first);
+  // A widget of another app arrives only after Android's consent, once the gallery is gone.
+  void _changed() => setState(() {});
+
+  @override
+  void initState() {
+    super.initState();
+    widget.state.addListener(_changed);
   }
 
-  void _remove(String entry) {
+  @override
+  void dispose() {
+    widget.state.removeListener(_changed);
+    super.dispose();
+  }
+
+  /// Entries whose kind or size no longer exists are skipped.
+  WidgetItem? _parse(String entry) {
+    final parts = entry.split(':');
+    final kind = WidgetKind.values.asNameMap()[parts.first];
+    if (kind == null) return null;
+    final size = WidgetSize.values.asNameMap()[parts.length > 1 ? parts[1] : ''];
+    final item = WidgetItem('today-$entry', kind, size != null && kind.sizes.contains(size) ? size : kind.sizes.first);
+    if (kind.builtIn) return item;
+    final hostId = parts.length > 3 ? int.tryParse(parts[2]) : null;
+    if (hostId == null) return null;
+    return item
+      ..hostId = hostId
+      ..provider = parts[3]
+      ..title = parts.skip(4).join(':');
+  }
+
+  void _remove(String entry, WidgetItem item) {
     setState(() => _today.remove(entry));
+    // Android keeps a hosted widget alive until its id is given back.
+    if (item.hostId != null) AppWidgets.delete(item.hostId!);
     widget.state.commit();
   }
 
   /// Small widgets pair up, wide ones take a row of their own.
-  List<List<(String, WidgetKind, WidgetSize)>> _rows() {
-    final rows = <List<(String, WidgetKind, WidgetSize)>>[];
+  List<List<(String, WidgetItem)>> _rows() {
+    final rows = <List<(String, WidgetItem)>>[];
     for (final entry in _today) {
-      final parsed = _parse(entry);
-      if (parsed == null) continue;
-      final item = (entry, parsed.$1, parsed.$2);
-      final small = parsed.$2.width < 4;
-      if (small && rows.isNotEmpty && rows.last.length == 1 && rows.last.first.$3.width < 4) {
-        rows.last.add(item);
+      final item = _parse(entry);
+      if (item == null) continue;
+      final small = item.width < 4;
+      if (small && rows.isNotEmpty && rows.last.length == 1 && rows.last.first.$2.width < 4) {
+        rows.last.add((entry, item));
       } else {
-        rows.add([item]);
+        rows.add([(entry, item)]);
       }
     }
     return rows;
   }
 
-  Widget _widget(Ios p, String entry, WidgetKind kind, WidgetSize size) => Stack(
+  Widget _widget(Ios p, String entry, WidgetItem item) => Stack(
     clipBehavior: Clip.none,
     children: [
       SizedBox(
-        width: size.width == 4 ? p.fullWidth : p.smallWidth,
-        height: p.icon + (size.height - 1) * p.rowPitch,
-        child: IgnorePointer(
-          ignoring: _editing,
-          child: GestureDetector(
-            onTap: () => openWidget(kind, widget.state),
-            child: HomeWidget(kind: kind, size: size, state: widget.state, scale: p.unit),
-          ),
-        ),
+        width: item.width == 4 ? p.fullWidth : p.smallWidth,
+        height: p.icon + (item.height - 1) * p.rowPitch,
+        // Android draws a widget of another app and takes its taps itself.
+        child: item.kind == WidgetKind.app
+            ? AppWidgetView(item: item, live: true, locked: _editing)
+            : IgnorePointer(
+                ignoring: _editing,
+                child: GestureDetector(
+                  onTap: () => openWidget(item.kind, widget.state),
+                  child: HomeWidget(kind: item.kind, size: item.size, state: widget.state, scale: p.unit),
+                ),
+              ),
       ),
       if (_editing)
         Positioned(
           left: -p(8),
           top: -p(8),
           child: GestureDetector(
-            onTap: () => _remove(entry),
+            onTap: () => _remove(entry, item),
             child: Container(
               width: p(24),
               height: p(24),
@@ -99,6 +129,8 @@ class _TodayViewState extends State<TodayView> {
     final rows = _rows();
     return Backdrop(
       dim: 0.28,
+      // Taps between widgets stay here; a swipe to the left or up closes the view.
+      tapToClose: false,
       onDismiss: () => Navigator.of(context).pop(),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
@@ -128,7 +160,7 @@ class _TodayViewState extends State<TodayView> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [for (final (entry, kind, size) in row) _widget(p, entry, kind, size)],
+                          children: [for (final (entry, item) in row) _widget(p, entry, item)],
                         ),
                       ),
                     ),

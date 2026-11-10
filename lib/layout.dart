@@ -171,6 +171,10 @@ class Slot {
   bool overlaps(int c, int r, int w, int h) => column < c + w && c < column + item.width && row < r + h && r < row + item.height;
 }
 
+/// The Glas setting "Lückenlos anordnen": items always flow to the top left in their order,
+/// as on iOS before version 18. Saved positions are kept but not used then.
+var compactLayout = false;
+
 List<List<bool>> _grid() => List.generate(rows, (_) => List.filled(columns, false));
 
 void _mark(List<List<bool>> used, int c, int r, HomeItem item) {
@@ -198,7 +202,7 @@ List<Slot> pack(List<HomeItem> items) {
   final pinned = <HomeItem>{};
   for (final item in items) {
     final c = item.column, r = item.row;
-    if (c != null && r != null && _free(used, c, r, item)) {
+    if (!compactLayout && c != null && r != null && _free(used, c, r, item)) {
       _mark(used, c, r, item);
       pinned.add(item);
     }
@@ -229,6 +233,16 @@ List<Slot> pack(List<HomeItem> items) {
     }
   }
   return null;
+}
+
+/// Where in the order of [items] something dropped on a cell goes when nothing may leave gaps:
+/// before the first item that sits on or after that cell.
+int flowIndex(List<HomeItem> items, HomeItem moving, int column, int row) {
+  final (c, r) = snapCell(moving, column, row);
+  for (final slot in pack(items)) {
+    if (slot.row > r || (slot.row == r && slot.column >= c)) return items.indexOf(slot.item);
+  }
+  return items.length;
 }
 
 /// How many items of a page fit.
@@ -425,6 +439,11 @@ class HomeLayout {
     }
     while (page >= pages.length) {
       pages.add([]);
+    }
+    if (compactLayout) {
+      pages[page].insert(flowIndex(pages[page], item, column, row), item);
+      _tidy();
+      return;
     }
     final result = arrange(pack(pages[page]), item, column, row);
     pages[page].clear();

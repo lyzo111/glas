@@ -42,6 +42,7 @@ class Settings {
     List<Map<String, dynamic>>? looks,
     this.look = 0,
     this.largeIcons = false,
+    this.compactHome = false,
     this.blurHome = false,
     this.dimHome = false,
     this.perspective = true,
@@ -184,6 +185,9 @@ class Settings {
   /// iOS's home screen options: icons without names, a softened or darkened wallpaper, and
   /// the wallpaper shifting as the phone tilts.
   bool largeIcons;
+
+  /// Apps and widgets close up to the top left instead of staying where they were put.
+  bool compactHome;
   bool blurHome;
   bool dimHome;
   bool perspective;
@@ -206,6 +210,7 @@ class Settings {
 
   void applyIconStyle() {
     IconStyle.current = IconStyle.values.asNameMap()[iconStyle] ?? IconStyle.standard;
+    compactLayout = compactHome;
     IconStyle.tint = Color(iconTint);
     IconStyle.darkGlass = glassTone == 'dark' || (glassTone == 'auto' && PlatformDispatcher.instance.platformBrightness == Brightness.dark);
   }
@@ -242,6 +247,7 @@ class Settings {
     'looks': looks,
     'look': look,
     'largeIcons': largeIcons,
+    'compactHome': compactHome,
     'blurHome': blurHome,
     'dimHome': dimHome,
     'perspective': perspective,
@@ -283,6 +289,7 @@ class Settings {
     looks: (j['looks'] as List?)?.map((l) => Map<String, dynamic>.from(l as Map)).toList(),
     look: j['look'] as int? ?? 0,
     largeIcons: j['largeIcons'] as bool? ?? false,
+    compactHome: j['compactHome'] as bool? ?? false,
     blurHome: j['blurHome'] as bool? ?? false,
     dimHome: j['dimHome'] as bool? ?? false,
     perspective: j['perspective'] as bool? ?? true,

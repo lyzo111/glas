@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 
 import 'appwidgets.dart';
@@ -81,7 +82,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _flipped = false;
 
   /// A finger on an icon in edit mode, so the pages hold still and the icon is what moves.
-  bool _touchingItem = false;
 
   /// Pulling the first page to the right opens the Today view, once per pull.
   bool _todayOpen = false;
@@ -292,7 +292,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _onUp(PointerEvent event) {
-    if (_touchingItem) setState(() => _touchingItem = false);
     final drag = _drag;
     if (drag == null) return;
     _flip?.cancel();
@@ -340,6 +339,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (drag == null || !drag.moved) return pack(items);
     final others = pack(items.where((i) => i != drag.item).toList());
     if (drag.hoverPage != page) return others;
+    if (compactLayout) {
+      final rest = items.where((i) => i != drag.item).toList();
+      return pack(rest..insert(flowIndex(rest, drag.item, drag.hoverColumn, drag.hoverRow), GapItem(drag.item.width, drag.item.height)));
+    }
     return arrange(others, GapItem(drag.item.width, drag.item.height), drag.hoverColumn, drag.hoverRow).slots;
   }
 
@@ -505,6 +508,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             state: _state,
             onPick: (kind, size) {
               _state.settings.today.add('${kind.name}:${size.name}');
+              _state.commit();
+            },
+            onPickApp: (provider, size) async {
+              final id = await AppWidgets.bind(provider.id);
+              if (id == null) return;
+              _state.settings.today.add(todayAppEntry(size, id, provider));
               _state.commit();
             },
           ),
@@ -764,38 +773,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     return Builder(
-      builder: (iconContext) => Listener(
-        onPointerDown: (_) {
-          if (_editing) setState(() => _touchingItem = true);
+      // A quick swipe over an icon turns the page in edit mode too; resting on it first drags it.
+      builder: (iconContext) => RawGestureDetector(
+        gestures: {
+          LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+            () => LongPressGestureRecognizer(duration: Duration(milliseconds: _editing ? 120 : 380)),
+            (r) => r.onLongPressStart = (d) {
+              _startDrag(item, place, d.globalPosition, d.localPosition);
+            },
+          ),
+          TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+            TapGestureRecognizer.new,
+            (r) => r.onTapUp = (d) {
+              if (_editing) return;
+              if (item is AppItem) {
+                final app = _state.apps[item.key];
+                if (app != null) _state.launch(app, iconContext);
+              } else if (item is FolderItem) {
+                _openFolder(item, d.globalPosition);
+              } else if (item is WidgetItem) {
+                final kinds = [item.kind, ...item.stack];
+                final kind = kinds[(stackPage[item.id] ?? 0).clamp(0, kinds.length - 1)];
+                kind == WidgetKind.note ? _editNote() : openWidget(kind, _state);
+              }
+            },
+          ),
         },
-        child: RawGestureDetector(
-          gestures: {
-            LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-              () => LongPressGestureRecognizer(duration: Duration(milliseconds: _editing ? 120 : 380)),
-              (r) => r.onLongPressStart = (d) {
-                _startDrag(item, place, d.globalPosition, d.localPosition);
-              },
-            ),
-            TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
-              TapGestureRecognizer.new,
-              (r) => r.onTapUp = (d) {
-                if (_editing) return;
-                if (item is AppItem) {
-                  final app = _state.apps[item.key];
-                  if (app != null) _state.launch(app, iconContext);
-                } else if (item is FolderItem) {
-                  _openFolder(item, d.globalPosition);
-                } else if (item is WidgetItem) {
-                  final kinds = [item.kind, ...item.stack];
-                  final kind = kinds[(stackPage[item.id] ?? 0).clamp(0, kinds.length - 1)];
-                  kind == WidgetKind.note ? _editNote() : openWidget(kind, _state);
-                }
-              },
-            ),
-          },
-          behavior: HitTestBehavior.opaque,
-          child: child,
-        ),
+        behavior: HitTestBehavior.opaque,
+        child: child,
       ),
     );
   }
@@ -1006,7 +1011,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             // Builds the neighbouring pages ahead, so the App Library is ready
                             // before the swipe reaches it.
                             allowImplicitScrolling: true,
-                            physics: _drag != null || _touchingItem ? const NeverScrollableScrollPhysics() : const _PagePhysics(),
+                            physics: _drag != null ? const NeverScrollableScrollPhysics() : const _PagePhysics(),
                             itemCount: _layout.pages.length + 1,
                             itemBuilder: (_, page) {
                               if (page == _layout.pages.length && !_editing) {
@@ -1209,6 +1214,8 @@ class WidgetGallery extends StatelessWidget {
     final p = Ios.of(context);
     return Backdrop(
       dim: 0.45,
+      // A tap between two widgets must not close it; swiping up or back does.
+      tapToClose: false,
       child: SafeArea(
         child: Padding(
           padding: EdgeInsets.fromLTRB(p(27), p(16), p(27), 0),
@@ -1221,6 +1228,8 @@ class WidgetGallery extends StatelessWidget {
                 child: ListView(
                   padding: EdgeInsets.only(bottom: p(30)),
                   physics: const BouncingScrollPhysics(),
+                  // Built ahead, so the list of apps is ready before it scrolls into view.
+                  scrollCacheExtent: ScrollCacheExtent.pixels(p(2400)),
                   children: [
                     for (final kind in WidgetKind.values)
                       for (final size in kind.sizes)

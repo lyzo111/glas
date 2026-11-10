@@ -437,6 +437,7 @@ class NotificationCenter extends StatelessWidget {
       type: MaterialType.transparency,
       child: Backdrop(
         dim: 0.42,
+        tapToClose: false,
         child: ListenableBuilder(
           listenable: state,
           builder: (context, _) => Stack(

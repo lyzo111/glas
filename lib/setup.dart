@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'glass.dart';
+import 'layout.dart';
 import 'lock_screen.dart';
 import 'native.dart';
 import 'state.dart';
@@ -112,6 +113,16 @@ class _SetupScreenState extends State<SetupScreen> with WidgetsBindingObserver {
                 const Divider(height: 32),
                 Text('Home-Bildschirm', style: theme.textTheme.titleMedium),
                 _option('Große Icons', 'Ohne App-Namen, wie die große Darstellung in iOS', _settings.largeIcons, (v) => _settings.largeIcons = v),
+                _option('Lückenlos anordnen', 'Apps und Widgets rücken nach oben links auf, wie vor iOS 18', _settings.compactHome, (v) {
+                  // Gaps back on: every page stays as it looks now.
+                  if (!v) {
+                    for (var page = 0; page < _state.layout.pages.length; page++) {
+                      _state.layout.pin(page);
+                    }
+                  }
+                  _settings.compactHome = v;
+                  compactLayout = v;
+                }),
                 _option('Hintergrund weichzeichnen', null, _settings.blurHome, (v) => _settings.blurHome = v),
                 _option('Hintergrund abdunkeln', null, _settings.dimHome, (v) => _settings.dimHome = v),
                 _option('Perspektive-Zoom', 'Der Hintergrund bewegt sich beim Neigen mit', _settings.perspective, (v) => _settings.perspective = v),

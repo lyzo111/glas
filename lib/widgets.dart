@@ -871,16 +871,22 @@ class _WidgetStackState extends State<WidgetStack> {
       clipBehavior: Clip.none,
       children: [
         // Two cards peeking out below say there is more here, like a stack of notifications.
-        for (final (inset, drop, alpha) in [(p(22), p(9), 0.22), (p(11), p(4.5), 0.4)])
+        // Only the strip of each that sticks out is drawn: a glass widget would let the rest
+        // show through, and the back card would show through the front one.
+        for (final (inset, drop, above, alpha) in [(p(22), p(9), p(4.5), 0.22), (p(11), p(4.5), 0.0, 0.4)])
           Positioned(
             left: inset,
             right: inset,
             bottom: -drop,
-            height: p(40),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: alpha),
-                borderRadius: BorderRadius.circular(p(18)),
+            height: drop - above,
+            child: ClipRect(
+              child: OverflowBox(
+                alignment: Alignment.bottomCenter,
+                minHeight: p(40),
+                maxHeight: p(40),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: _peekColor(alpha), borderRadius: BorderRadius.circular(p(18))),
+                ),
               ),
             ),
           ),
@@ -907,7 +913,7 @@ class _WidgetStackState extends State<WidgetStack> {
                       margin: EdgeInsets.symmetric(vertical: p(2)),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: i == current ? 1 : 0.45),
+                        color: (_glass ? glassInk(IconStyle.current) : Colors.white).withValues(alpha: i == current ? 1 : 0.45),
                       ),
                     ),
                 ],
@@ -918,6 +924,14 @@ class _WidgetStackState extends State<WidgetStack> {
       ],
     );
   }
+}
+
+/// The cards under a stack: white, or in the glass styles the colour of the glass.
+Color _peekColor(double alpha) {
+  final look = IconStyle.current;
+  if (!look.glass) return Colors.white.withValues(alpha: alpha);
+  final pane = (glassPane(look).gradient! as LinearGradient).colors.last;
+  return pane.withValues(alpha: (pane.a * alpha / 0.4).clamp(0.0, 1.0));
 }
 
 // ----------------------------------------------------------------- World clock

@@ -161,6 +161,49 @@ void main() {
 }
 
 void placementTests() {
+  group('Lückenlos anordnen', () {
+    HomeLayout page(int apps) => HomeLayout()..sync(keys(apps));
+    tearDown(() => compactLayout = false);
+
+    test('eine App auf leerem Feld rückt ans Ende auf', () {
+      compactLayout = true;
+      final l = page(3);
+      final item = l.pages[0][0];
+      l.drop(item, 0, 2, 4);
+      expect(ids(l.pages[0]), ['a/1', 'a/2', 'a/0']);
+      expect(
+        [
+          for (final s in pack(l.pages[0])) [s.column, s.row],
+        ],
+        [
+          [0, 0],
+          [1, 0],
+          [2, 0],
+        ],
+      );
+    });
+
+    test('zwischen zwei Apps abgelegt, reiht sie sich dort ein', () {
+      compactLayout = true;
+      final l = page(5);
+      final item = l.pages[0][4];
+      l.drop(item, 0, 1, 0);
+      expect(ids(l.pages[0]), ['a/0', 'a/4', 'a/1', 'a/2', 'a/3']);
+    });
+
+    test('gespeicherte Lücken zählen nicht, kommen beim Ausschalten aber nicht zurück', () {
+      final l = page(3);
+      final item = l.pages[0][0];
+      l.pin(0);
+      l.drop(item, 0, 2, 4);
+      compactLayout = true;
+      expect([for (final s in pack(l.pages[0])) s.row], [0, 0, 0]);
+      l.pin(0);
+      compactLayout = false;
+      expect([for (final s in pack(l.pages[0])) s.row], [0, 0, 0]);
+    });
+  });
+
   group('Freie Platzierung', () {
     HomeLayout page(int apps) => HomeLayout()..sync(keys(apps));
 

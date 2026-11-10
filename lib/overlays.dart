@@ -446,6 +446,7 @@ class _SpotlightState extends State<Spotlight> {
 
     return Backdrop(
       dim: 0.45,
+      tapToClose: false,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           p(16),
