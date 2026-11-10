@@ -491,26 +491,99 @@ class BatteryGlyph extends StatelessWidget {
   }
 }
 
-/// The icon styles of the iOS home screen editor.
+/// The icon styles of the iOS home screen editor, in its order.
 enum IconStyle {
   standard('Standard'),
   dark('Dunkel'),
-  tinted('Getönt'),
-  clear('Klar');
+  clear('Transparent'),
+  tinted('Eingefärbt');
 
   const IconStyle(this.label);
   final String label;
 
-  /// Set from the settings; every [AppIcon] reads it.
+  /// Whether icons and widgets are glass with a glyph of one colour.
+  bool get glass => this == clear || this == tinted;
+
+  /// Set from the settings; every [AppIcon] reads them.
   static IconStyle current = IconStyle.standard;
   static Color tint = const Color(0xFF64D2FF);
+
+  /// The glass styles come light or dark.
+  static bool darkGlass = true;
 }
 
-const iconTints = [0xFF64D2FF, 0xFF0A84FF, 0xFF5E5CE6, 0xFFFF375F, 0xFFFF9F0A, 0xFFFFD60A, 0xFF30D158];
+const iconTints = [0xFFD6D6DB, 0xFF64D2FF, 0xFF0A84FF, 0xFF5E5CE6, 0xFFFF375F, 0xFFFF9F0A, 0xFFFFD60A, 0xFF30D158];
 
-/// Turns brightness into coverage of one flat colour, as the tinted and clear styles do.
-ColorFilter toneFilter(Color tint) =>
-    ColorFilter.matrix([0, 0, 0, 0, tint.r * 255, 0, 0, 0, 0, tint.g * 255, 0, 0, 0, 0, tint.b * 255, 0.36, 1.2, 0.12, 0, -46]);
+/// The pane of a glass icon or widget. A live blur behind each one would cost a render pass
+/// apiece, so the pane is a see-through sheet and the rim does the rest.
+BoxDecoration glassPane(IconStyle look) {
+  final dark = IconStyle.darkGlass;
+  final tint = IconStyle.tint;
+  final colors = switch (look) {
+    IconStyle.tinted when dark => [
+      Color.lerp(const Color(0xFF34343A), tint, 0.34)!.withValues(alpha: 0.74),
+      Color.lerp(const Color(0xFF060608), tint, 0.2)!.withValues(alpha: 0.74),
+    ],
+    IconStyle.tinted => [Color.lerp(Colors.white, tint, 0.4)!.withValues(alpha: 0.66), Color.lerp(Colors.white, tint, 0.62)!.withValues(alpha: 0.6)],
+    _ when dark => [const Color(0xFF4A4A52).withValues(alpha: 0.5), const Color(0xFF0C0C10).withValues(alpha: 0.5)],
+    _ => [Colors.white.withValues(alpha: 0.4), Colors.white.withValues(alpha: 0.22)],
+  };
+  return BoxDecoration(
+    gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: colors),
+  );
+}
+
+/// The colour of what is drawn on a [glassPane].
+Color glassInk(IconStyle look) {
+  if (look == IconStyle.tinted) return Color.lerp(IconStyle.tint, Colors.white, IconStyle.darkGlass ? 0.42 : 0.9)!;
+  return Colors.white.withValues(alpha: IconStyle.darkGlass ? 0.88 : 0.97);
+}
+
+/// Turns brightness into coverage of one flat colour: what is brighter than [floor] shows, or
+/// with [inverted] what is darker than it. Only for pictures without transparency, since a
+/// see-through edge pixel would come out solid.
+ColorFilter toneFilter(Color tint, {double floor = 0.18, double gain = 1.7, bool inverted = false}) {
+  final s = (inverted ? -gain : gain) * tint.a;
+  final offset = (inverted ? gain * floor : -gain * floor) * 255 * tint.a;
+  return ColorFilter.matrix([
+    ...[0, 0, 0, 0, tint.r * 255],
+    ...[0, 0, 0, 0, tint.g * 255],
+    ...[0, 0, 0, 0, tint.b * 255],
+    ...[s * 0.2126, s * 0.7152, s * 0.0722, 0, offset],
+  ]);
+}
+
+/// The specular edge of glass: light catches the top left and the bottom right.
+class GlassEdge extends CustomPainter {
+  const GlassEdge(this.radius, {this.strength = 1});
+  final double radius;
+  final double strength;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRSuperellipse(
+      RSuperellipse.fromRectAndRadius(rect.deflate(0.5), Radius.circular(radius)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.78 * strength),
+            Colors.white.withValues(alpha: 0.14 * strength),
+            Colors.white.withValues(alpha: 0.08 * strength),
+            Colors.white.withValues(alpha: 0.5 * strength),
+          ],
+          stops: const [0, 0.36, 0.64, 1],
+        ).createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(GlassEdge old) => old.radius != radius || old.strength != strength;
+}
 
 /// App icon in the continuous-corner shape, plus an optional notification badge.
 class AppIcon extends StatelessWidget {
@@ -528,46 +601,48 @@ class AppIcon extends StatelessWidget {
   );
 
   /// [Future]s would flash an empty icon on each rebuild, so known bytes are used directly.
-  Widget _bitmap(AppInfo info, String layer, {ColorFilter? filter}) {
+  /// [color] paints the picture's shape in one colour, for the mask layer.
+  Widget _bitmap(AppInfo info, String layer, int cache, {Color? color}) {
     final known = Native.iconNow(info, layer);
-    Widget image(Uint8List bytes) {
-      final picture = Image.memory(bytes, width: size, height: size, cacheWidth: 180, gaplessPlayback: true, fit: BoxFit.cover);
-      return filter == null ? picture : ColorFiltered(colorFilter: filter, child: picture);
-    }
+    Widget image(Uint8List bytes) => Image.memory(
+      bytes,
+      width: size,
+      height: size,
+      cacheWidth: cache,
+      gaplessPlayback: true,
+      fit: BoxFit.cover,
+      color: color,
+      colorBlendMode: BlendMode.srcIn,
+    );
 
     if (known != null) return image(known);
     return FutureBuilder<Uint8List?>(future: Native.icon(info, layer), builder: (_, snapshot) => snapshot.data == null ? _empty() : image(snapshot.data!));
   }
 
-  Widget _face(AppInfo info, IconStyle look) {
-    final tint = look == IconStyle.clear ? Colors.white : IconStyle.tint;
-    final tile = switch (look) {
-      IconStyle.clear => BoxDecoration(color: Colors.white.withValues(alpha: 0.17)),
-      IconStyle.tinted => BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color.lerp(const Color(0xFF1C1C1E), tint, 0.3)!, Color.lerp(Colors.black, tint, 0.14)!],
-        ),
-      ),
-      _ => const BoxDecoration(
-        gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF2C2C2E), Color(0xFF0E0E10)]),
-      ),
-    };
+  Widget _face(AppInfo info, IconStyle look, int cache) {
     final role = info.role;
-    final Widget glyph;
-    if (role != null) {
-      final painted = RoleIcon(role: role, size: size, dark: look != IconStyle.standard);
+    if (look == IconStyle.standard) {
       // Apple Music is the real thing, so its own icon beats a drawn copy.
-      if (look == IconStyle.standard && role == Role.music) return _bitmap(info, 'plain');
-      if (look == IconStyle.standard || look == IconStyle.dark) return painted;
-      glyph = ColorFiltered(colorFilter: toneFilter(tint), child: painted);
+      return role == null || role == Role.music ? _bitmap(info, 'plain', cache) : RoleIcon(role: role, size: size);
+    }
+    if (look == IconStyle.dark && role != null) return RoleIcon(role: role, size: size, dark: true);
+    final Widget glyph;
+    if (look == IconStyle.dark) {
+      glyph = _bitmap(info, 'foreground', cache);
+    } else if (role != null && role != Role.music) {
+      glyph = ColorFiltered(
+        colorFilter: toneFilter(glassInk(look)),
+        child: RoleIcon(role: role, size: size, dark: true),
+      );
     } else {
-      if (look == IconStyle.standard) return _bitmap(info, 'plain');
-      glyph = look == IconStyle.dark ? _bitmap(info, 'foreground') : _bitmap(info, 'mono', filter: toneFilter(tint));
+      glyph = _bitmap(info, 'mono', cache, color: glassInk(look));
     }
     return DecoratedBox(
-      decoration: tile,
+      decoration: look.glass
+          ? glassPane(look)
+          : const BoxDecoration(
+              gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF2C2C2E), Color(0xFF0E0E10)]),
+            ),
       child: SizedBox.square(dimension: size, child: glyph),
     );
   }
@@ -575,17 +650,25 @@ class AppIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final info = app;
+    final look = style ?? IconStyle.current;
     final radius = BorderRadius.circular(size * 0.2237);
+    // Decoded a step above what is shown, and in few sizes so the pictures are shared.
+    final pixels = size * MediaQuery.devicePixelRatioOf(context);
+    final cache = pixels <= 96
+        ? 96
+        : pixels <= 192
+        ? 192
+        : 288;
     return SizedBox(
       width: size,
       height: size,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          ClipRSuperellipse(borderRadius: radius, child: info == null ? _empty() : _face(info, style ?? IconStyle.current)),
-          // Hairline of light along the edge, as on the Liquid Glass icons.
+          ClipRSuperellipse(borderRadius: radius, child: info == null ? _empty() : _face(info, look, cache)),
+          // Light along the edge, as on the Liquid Glass icons; the glass styles catch more of it.
           IgnorePointer(
-            child: CustomPaint(size: Size.square(size), painter: _IconEdge(size * 0.2237)),
+            child: CustomPaint(size: Size.square(size), painter: look.glass ? GlassEdge(size * 0.2237) : _IconEdge(size * 0.2237)),
           ),
           if (badge > 0)
             Positioned(

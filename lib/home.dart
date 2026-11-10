@@ -5,12 +5,14 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'appwidgets.dart';
 import 'control_center.dart';
 import 'glass.dart';
 import 'layout.dart';
 import 'library.dart';
 import 'native.dart';
 import 'overlays.dart';
+import 'customize.dart';
 import 'setup.dart';
 import 'state.dart';
 import 'island.dart';
@@ -374,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     _state.commit();
                   },
                 ),
-          if (item is WidgetItem) QuickAction('Zu Stapel hinzufügen', Icons.layers_outlined, () => _addToStack(item)),
+          if (item is WidgetItem && item.kind.builtIn) QuickAction('Zu Stapel hinzufügen', Icons.layers_outlined, () => _addToStack(item)),
           if (item is WidgetItem && item.stack.isNotEmpty)
             QuickAction('Dieses Widget aus Stapel entfernen', Icons.layers_clear_outlined, () {
               _layout.removeFromStack(item, (stackPage[item.id] ?? 0).clamp(0, item.stack.length));
@@ -419,6 +421,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (yes != true) return;
     }
     _layout.remove(item);
+    // Android keeps a hosted widget alive until its id is given back.
+    if (item is WidgetItem && item.hostId != null) AppWidgets.delete(item.hostId!);
     _state.commit();
   }
 
@@ -644,27 +648,47 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _layout.addWidget(kind, page, size);
         _state.commit();
       },
+      onPickApp: (provider, size) async {
+        // Android asks for consent the first time, and some widgets have a setup screen.
+        final id = await AppWidgets.bind(provider.id);
+        if (id == null || !mounted) return;
+        final page = (_pages.page?.round() ?? 0).clamp(0, _layout.pages.length - 1);
+        _layout.addWidget(WidgetKind.app, page, size)
+          ..hostId = id
+          ..provider = provider.id
+          ..title = provider.app;
+        _state.commit();
+      },
     ),
   );
 
   void _editMenu() => openOverlay<void>(
     context,
     (_) => QuickActions(
-      position: Offset(Ios.of(context)(90), Ios.of(context)(20)),
+      position: Offset(Ios.of(context)(50), islandCenter(context) - Ios.of(context)(30)),
       preview: const SizedBox(),
       actions: [
         QuickAction('Widget hinzufügen', Icons.add_box_outlined, _addWidget),
+        QuickAction('Anpassen', Icons.brush_outlined, () => openOverlay<void>(context, (_) => CustomizeSheet(state: _state))),
+        QuickAction(
+          'Hintergrund bearbeiten',
+          Icons.photo_outlined,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SetupScreen(state: _state, wallpaperOnly: true))),
+        ),
         QuickAction('Seiten bearbeiten', Icons.view_carousel_outlined, _openPages),
-
-        QuickAction('App-Icons', Icons.palette_outlined, () => openOverlay<void>(context, (_) => IconStyleSheet(state: _state))),
-        QuickAction('Anpassen', Icons.brush_outlined, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SetupScreen(state: _state)))),
+        QuickAction(
+          'Glas-Einstellungen',
+          Icons.settings_outlined,
+          () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SetupScreen(state: _state))),
+        ),
       ],
     ),
   );
 
   // ------------------------------------------------------------------ UI
 
-  Widget _itemPreview(HomeItem item) {
+  /// [live] is for the item's own place on the home screen; everything else is a picture.
+  Widget _itemPreview(HomeItem item, {bool live = false}) {
     final p = Ios.of(context);
     return switch (item) {
       AppItem() => AppIcon(app: _state.apps[item.key], size: _iconSize),
@@ -672,7 +696,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       WidgetItem() => SizedBox(
         width: item.width == 4 ? p.fullWidth : p.smallWidth,
         height: p.icon + (item.height - 1) * p.rowPitch,
-        child: item.stack.isEmpty
+        child: item.kind == WidgetKind.app
+            ? AppWidgetView(item: item, live: live, locked: _editing)
+            : item.stack.isEmpty
             ? HomeWidget(kind: item.kind, size: item.size, state: _state, scale: p.unit)
             : WidgetStack(id: item.id, kinds: [item.kind, ...item.stack], size: item.size, state: _state, scale: p.unit),
       ),
@@ -697,7 +723,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         showLabel: !inDock && !_state.settings.largeIcons,
         child: FolderIcon(state: _state, folder: item, size: _iconSize),
       ),
-      WidgetItem() => _Labeled(label: item.kind.label, showLabel: true, child: _itemPreview(item)),
+      WidgetItem() => _Labeled(label: item.title ?? item.kind.label, showLabel: true, child: _itemPreview(item, live: true)),
     };
     if (item is GapItem) return child;
     child = AnimatedScale(scale: merging ? 1.14 : 1, duration: const Duration(milliseconds: 150), child: child);
@@ -724,8 +750,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Container(
                 width: p(23),
                 height: p(23),
-                decoration: const BoxDecoration(color: Color(0xB3303036), shape: BoxShape.circle),
-                child: Icon(Icons.remove, size: p(15), color: Colors.white),
+                decoration: const BoxDecoration(
+                  color: Color(0xF2C9C9CE),
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(blurRadius: 3, color: Color(0x33000000))],
+                ),
+                child: Icon(Icons.remove_rounded, size: p(17), color: const Color(0xFF2C2C2E)),
               ),
             ),
           ),
@@ -884,13 +914,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _editBar() {
     final p = Ios.of(context);
     return Padding(
-      padding: EdgeInsets.only(top: islandCenter(context) - p(16), left: p(18), right: p(18)),
+      padding: EdgeInsets.only(top: islandCenter(context) - p(21), left: p(12), right: p(12)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Pill(label: 'Bearbeiten', onTap: _editMenu),
+          _Pill(icon: Icons.brush_rounded, onTap: _editMenu),
           const Spacer(),
-          _Pill(label: 'Fertig', onTap: () => _setEditing(false)),
+          _Pill(icon: Icons.check_rounded, onTap: () => _setEditing(false)),
         ],
       ),
     );
@@ -1133,22 +1163,29 @@ class _Labeled extends StatelessWidget {
   }
 }
 
+/// The two glass capsules iOS shows above the home screen while it is edited.
 class _Pill extends StatelessWidget {
-  const _Pill({required this.label, required this.onTap});
-  final String label;
+  const _Pill({required this.icon, required this.onTap});
+  final IconData icon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final p = Ios.of(context);
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Glass(
-        radius: p(16),
-        tint: 0.14,
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: p(14), vertical: p(7)),
-          child: Text(label, style: sf(p(14), weight: 600, height: 1.25)),
+      // The capsule is small; the finger gets a little more room around it.
+      child: Padding(
+        padding: EdgeInsets.all(p(8)),
+        child: Glass(
+          radius: p(13),
+          tint: 0.16,
+          child: SizedBox(
+            width: p(60),
+            height: p(26),
+            child: Icon(icon, size: p(17), color: Colors.white),
+          ),
         ),
       ),
     );
@@ -1157,12 +1194,15 @@ class _Pill extends StatelessWidget {
 
 /// The sheet behind the plus of the iOS edit mode: every widget, shown as it will look.
 class WidgetGallery extends StatelessWidget {
-  const WidgetGallery({super.key, required this.state, required this.onPick, this.only});
+  const WidgetGallery({super.key, required this.state, required this.onPick, this.onPickApp, this.only});
   final AppState state;
 
   /// Shows only widgets of this size, for adding to a stack.
   final WidgetSize? only;
   final void Function(WidgetKind, WidgetSize) onPick;
+
+  /// With this the gallery also lists the widgets of the installed apps.
+  final void Function(WidgetProvider, WidgetSize)? onPickApp;
 
   @override
   Widget build(BuildContext context) {
@@ -1184,7 +1224,7 @@ class WidgetGallery extends StatelessWidget {
                   children: [
                     for (final kind in WidgetKind.values)
                       for (final size in kind.sizes)
-                        if (only == null || size == only)
+                        if (kind.builtIn && (only == null || size == only))
                           GestureDetector(
                             // The previews ignore touches, so the whole tile has to take the tap.
                             behavior: HitTestBehavior.opaque,
@@ -1211,6 +1251,14 @@ class WidgetGallery extends StatelessWidget {
                               ),
                             ),
                           ),
+                    if (only == null && onPickApp != null)
+                      AppWidgetList(
+                        state: state,
+                        onPick: (provider, size) {
+                          Navigator.of(context).pop();
+                          onPickApp!(provider, size);
+                        },
+                      ),
                   ],
                 ),
               ),

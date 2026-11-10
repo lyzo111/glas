@@ -31,10 +31,7 @@ const samsung = [
 
 void main() {
   roleTests();
-  final apps = [
-    for (final p in samsung) app(p),
-    for (var i = 0; i < 300; i++) app('org.app$i', i.isEven ? 'Soziale Netzwerke' : 'Unterhaltung'),
-  ];
+  final apps = [for (final p in samsung) app(p), for (var i = 0; i < 300; i++) app('org.app$i', i.isEven ? 'Soziale Netzwerke' : 'Unterhaltung')];
 
   test('Dock ist Telefon, Browser, Nachrichten, Musik', () {
     final l = presetLayout(apps, {'phone': 'com.samsung.android.dialer', 'sms': 'com.samsung.android.messaging'});
@@ -81,16 +78,12 @@ void main() {
 
 void roleTests() {
   test('von zwei Wallets wird nur Samsungs zur iOS-App', () {
-    expect(
-      rolesTaken({'com.samsung.android.spay', 'com.google.android.apps.walletnfcrel'}, {}),
-      {'com.google.android.apps.walletnfcrel'},
-    );
+    expect(rolesTaken({'com.samsung.android.spay', 'com.google.android.apps.walletnfcrel'}, {}), {'com.google.android.apps.walletnfcrel'});
   });
 
   test('die Standard-App gewinnt ihre Rolle', () {
-    expect(
-      rolesTaken({'com.samsung.android.messaging', 'com.google.android.apps.messaging'}, {'com.google.android.apps.messaging'}),
-      {'com.samsung.android.messaging'},
-    );
+    expect(rolesTaken({'com.samsung.android.messaging', 'com.google.android.apps.messaging'}, {'com.google.android.apps.messaging'}), {
+      'com.samsung.android.messaging',
+    });
   });
 }

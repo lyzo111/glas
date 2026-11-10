@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -51,6 +52,7 @@ class Settings {
     this.layoutVersion = 0,
     this.iconStyle = 'standard',
     this.iconTint = 0xFF64D2FF,
+    this.glassTone = 'dark',
     this.systemWallpaper,
     List<String>? recent,
   }) : controls = controls ?? ['rotation', 'timer', 'calculator', 'qr'],
@@ -199,9 +201,13 @@ class Settings {
   String iconStyle;
   int iconTint;
 
+  /// Whether the glass styles are light, dark or follow Android ("auto").
+  String glassTone;
+
   void applyIconStyle() {
     IconStyle.current = IconStyle.values.asNameMap()[iconStyle] ?? IconStyle.standard;
     IconStyle.tint = Color(iconTint);
+    IconStyle.darkGlass = glassTone == 'dark' || (glassTone == 'auto' && PlatformDispatcher.instance.platformBrightness == Brightness.dark);
   }
 
   /// Which wallpapers Android was last given.
@@ -246,6 +252,7 @@ class Settings {
     'layoutVersion': layoutVersion,
     'iconStyle': iconStyle,
     'iconTint': iconTint,
+    'glassTone': glassTone,
     'systemWallpaper': systemWallpaper,
     'recent': recent,
   };
@@ -286,6 +293,7 @@ class Settings {
     layoutVersion: j['layoutVersion'] as int? ?? 0,
     iconStyle: j['iconStyle'] as String? ?? 'standard',
     iconTint: j['iconTint'] as int? ?? 0xFF64D2FF,
+    glassTone: j['glassTone'] as String? ?? 'dark',
     systemWallpaper: j['systemWallpaper'] as String?,
     recent: (j['recent'] as List?)?.cast<String>(),
   );
@@ -366,6 +374,8 @@ class AppState extends ChangeNotifier {
       if (event == 'apps') state.reloadApps();
       if (event == 'changed') {
         await state._reloadIfChanged();
+        // Android may have changed between light and dark meanwhile.
+        state.settings.applyIconStyle();
         state._syncSystemWallpaper();
         state._syncDepth();
         state.refresh();
@@ -462,13 +472,18 @@ class AppState extends ChangeNotifier {
 
   /// One save after another, each through its own temporary file: app changes can start
   /// several at once.
-  Future<void> saveLayout() => _layoutSaving = _layoutSaving.then((_) async {
+  Future<void> saveLayout() => _layoutSaving = _layoutSaving
+      .then((_) async {
         final tmp = File('${_file.path}.${DateTime.now().microsecondsSinceEpoch}.tmp');
         await tmp.writeAsString(jsonEncode(layout.toJson()));
         await tmp.rename(_file.path);
-      }).catchError((Object e) => debugPrint('layout not saved: $e'));
+      })
+      .catchError((Object e) => debugPrint('layout not saved: $e'));
 
   Future<void> _layoutSaving = Future.value();
+
+  /// Redraws without saving, while a slider is being dragged.
+  void repaint() => notifyListeners();
 
   /// Saves and redraws after the layout or the settings changed.
   void commit() {

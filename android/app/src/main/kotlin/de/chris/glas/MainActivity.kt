@@ -50,6 +50,7 @@ private fun Activity.useFastestDisplayMode() {
 
 class MainActivity : FlutterActivity() {
     private var bridge: Bridge? = null
+    private var widgets: WidgetHost? = null
     private var resumedAt = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,6 +68,19 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         bridge = Bridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        widgets = WidgetHost(this, flutterEngine.dartExecutor.binaryMessenger).also {
+            flutterEngine.platformViewsController.registry.registerViewFactory(WidgetHost.VIEW_TYPE, it.factory)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        widgets?.start()
+    }
+
+    override fun onStop() {
+        widgets?.stop()
+        super.onStop()
     }
 
     /**
@@ -95,6 +109,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (widgets?.onActivityResult(requestCode, resultCode) == true) return
         bridge?.onActivityResult(requestCode, resultCode, data)
     }
 
@@ -104,6 +119,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        widgets?.close()
         bridge?.close()
         super.cleanUpFlutterEngine(flutterEngine)
     }

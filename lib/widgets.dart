@@ -8,7 +8,8 @@ import 'layout.dart';
 import 'native.dart';
 import 'state.dart';
 
-/// Built-in home screen widgets, drawn after the iOS ones. Android's own widgets aren't hosted.
+/// Built-in home screen widgets, drawn after the iOS ones. Widgets of other apps are hosted
+/// natively, see appwidgets.dart.
 class HomeWidget extends StatelessWidget {
   const HomeWidget({super.key, required this.kind, required this.size, required this.state, required this.scale});
   final WidgetKind kind;
@@ -22,35 +23,81 @@ class HomeWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Ios(scale);
     return Ticker(
-      builder: (_, now) => switch (kind) {
-        WidgetKind.weather => _Weather(state, p, size: size),
-        WidgetKind.calendar => _Card(
-          p,
-          child: switch (size) {
-            WidgetSize.small => _Calendar(state, now, p),
-            WidgetSize.medium => _Agenda(state, now, p),
-            WidgetSize.large => Column(
-              children: [
-                Expanded(child: _Agenda(state, now, p)),
-                Expanded(child: _Month(now, p)),
-              ],
-            ),
-          },
-        ),
-        WidgetKind.month => _Card(p, child: _Month(now, p)),
-        WidgetKind.clock => _Card(
-          p,
-          color: const Color(0xFF1C1C1E),
-          child: size == WidgetSize.small ? CustomPaint(painter: _ClockPainter(now), size: Size.infinite) : _ClockWide(now, p),
-        ),
-        WidgetKind.battery => _Card(p, child: size == WidgetSize.small ? _Battery(state, p) : _BatteryWide(state, p)),
-        WidgetKind.music => size == WidgetSize.small ? _MusicSmall(state, p) : _Music(state, p),
-        WidgetKind.worldClock => _WorldClock(state, now, p, wide: size != WidgetSize.small),
-        WidgetKind.note => _Note(state, p),
-        WidgetKind.shortcuts => _Shortcuts(state, p, wide: size != WidgetSize.small),
-        WidgetKind.photos => _Photo(state, p),
-        WidgetKind.date => _Card(p, child: _DateFace(now, p)),
+      builder: (_, now) {
+        final face = switch (kind) {
+          WidgetKind.weather => _Weather(state, p, size: size),
+          WidgetKind.calendar => _Card(
+            p,
+            child: switch (size) {
+              WidgetSize.small => _Calendar(state, now, p),
+              WidgetSize.medium => _Agenda(state, now, p),
+              WidgetSize.large => Column(
+                children: [
+                  Expanded(child: _Agenda(state, now, p)),
+                  Expanded(child: _Month(now, p)),
+                ],
+              ),
+            },
+          ),
+          WidgetKind.month => _Card(p, child: _Month(now, p)),
+          WidgetKind.clock => _Card(
+            p,
+            color: const Color(0xFF1C1C1E),
+            child: size == WidgetSize.small
+                ? CustomPaint(
+                    painter: _ClockPainter(now, glass: _glass),
+                    size: Size.infinite,
+                  )
+                : _ClockWide(now, p),
+          ),
+          WidgetKind.battery => _Card(p, child: size == WidgetSize.small ? _Battery(state, p) : _BatteryWide(state, p)),
+          WidgetKind.music => size == WidgetSize.small ? _MusicSmall(state, p) : _Music(state, p),
+          WidgetKind.worldClock => _WorldClock(state, now, p, wide: size != WidgetSize.small),
+          WidgetKind.note => _Note(state, p),
+          WidgetKind.shortcuts => _Shortcuts(state, p, wide: size != WidgetSize.small),
+          WidgetKind.photos => _Photo(state, p),
+          WidgetKind.date => _Card(p, child: _DateFace(now, p)),
+          WidgetKind.app => const SizedBox(),
+        };
+        // A photo stays a photo; everything else turns to glass with the icons.
+        if (!_glass || (kind == WidgetKind.photos && state.photo != null)) return face;
+        return _GlassFace(p, light: _lightKinds.contains(kind), child: face);
       },
+    );
+  }
+}
+
+/// Whether the glass icon styles are on; the widgets then turn to glass as well.
+bool get _glass => IconStyle.current.glass;
+
+const _lightKinds = {WidgetKind.calendar, WidgetKind.month, WidgetKind.battery, WidgetKind.date, WidgetKind.note};
+
+/// A widget in the clear or tinted style, as iOS draws it: its picture keeps only its
+/// brightness, which becomes ink on a pane of glass. [light] says the picture is dark on
+/// white; otherwise it is light on dark.
+class _GlassFace extends StatelessWidget {
+  const _GlassFace(this.p, {required this.light, required this.child});
+  final Ios p;
+  final bool light;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final look = IconStyle.current;
+    final ink = glassInk(look);
+    return ClipRSuperellipse(
+      borderRadius: BorderRadius.circular(p(24)),
+      child: CustomPaint(
+        foregroundPainter: GlassEdge(p(24)),
+        child: DecoratedBox(
+          decoration: glassPane(look),
+          child: ColorFiltered(
+            colorFilter: light ? toneFilter(ink, floor: 0.97, gain: 1.2, inverted: true) : toneFilter(ink, floor: 0.13, gain: 1.25),
+            // The corners outside the card must read as background too.
+            child: ColoredBox(color: light ? Colors.white : _night, child: child),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -75,6 +122,7 @@ class _Card extends StatelessWidget {
 const _red = Color(0xFFFF3B30);
 const _ink = Color(0xFF1C1C1E);
 const _dim = Color(0xFF8E8E93);
+const _night = Color(0xFF1C1C1E);
 
 // ------------------------------------------------------------------- Weather
 
@@ -97,6 +145,7 @@ String weatherText(int code) => switch (code) {
 };
 
 List<Color> _sky(Weather? w) {
+  if (_glass) return const [_night, _night];
   if (w == null) return const [Color(0xFF2D7DD2), Color(0xFF7DB9E8)];
   if (!w.day) return const [Color(0xFF0B1026), Color(0xFF2A3560)];
   if (_rainy(w.code) || _stormy(w.code)) return const [Color(0xFF4A5868), Color(0xFF7D8A99)];
@@ -462,21 +511,25 @@ class _Agenda extends StatelessWidget {
 // --------------------------------------------------------------------- Clock
 
 class _ClockPainter extends CustomPainter {
-  _ClockPainter(this.time);
+  _ClockPainter(this.time, {this.glass = false});
   final DateTime time;
+
+  /// On glass the face is a faint disc with light numerals and hands.
+  final bool glass;
 
   @override
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = min(size.width, size.height) / 2 * 0.86;
-    canvas.drawCircle(c, r, Paint()..color = Colors.white);
+    final ink = glass ? Colors.white : Colors.black;
+    canvas.drawCircle(c, r, Paint()..color = glass ? Colors.white.withValues(alpha: 0.16) : Colors.white);
     for (var i = 1; i <= 12; i++) {
       final a = i * pi / 6;
       final text = TextPainter(
         textDirection: TextDirection.ltr,
         text: TextSpan(
           text: '$i',
-          style: sf(r * 0.2, weight: 500, color: Colors.black, height: 1),
+          style: sf(r * 0.2, weight: 500, color: ink, height: 1),
         ),
       )..layout();
       text.paint(canvas, c + Offset(sin(a), -cos(a)) * (r * 0.8) - Offset(text.width / 2, text.height / 2));
@@ -493,13 +546,13 @@ class _ClockPainter extends CustomPainter {
       );
     }
 
-    hand((time.hour % 12 + time.minute / 60) / 12, r * 0.48, r * 0.075, Colors.black);
-    hand(time.minute / 60, r * 0.7, r * 0.055, Colors.black);
+    hand((time.hour % 12 + time.minute / 60) / 12, r * 0.48, r * 0.075, ink);
+    hand(time.minute / 60, r * 0.7, r * 0.055, ink);
     canvas.drawCircle(c, r * 0.05, Paint()..color = const Color(0xFFFF9500));
   }
 
   @override
-  bool shouldRepaint(_ClockPainter old) => old.time.minute != time.minute;
+  bool shouldRepaint(_ClockPainter old) => old.time.minute != time.minute || old.glass != glass;
 }
 
 class _ClockWide extends StatelessWidget {
@@ -642,7 +695,7 @@ class _MusicSmall extends StatelessWidget {
     return ClipRSuperellipse(
       borderRadius: BorderRadius.circular(p(24)),
       child: DecoratedBox(
-        decoration: const BoxDecoration(gradient: _musicGradient),
+        decoration: _glass ? const BoxDecoration(color: _night) : const BoxDecoration(gradient: _musicGradient),
         child: Padding(
           padding: EdgeInsets.all(p(15)),
           child: SizedBox.expand(
@@ -694,7 +747,7 @@ class _Music extends StatelessWidget {
     return ClipRSuperellipse(
       borderRadius: BorderRadius.circular(p(24)),
       child: DecoratedBox(
-        decoration: const BoxDecoration(gradient: _musicGradient),
+        decoration: _glass ? const BoxDecoration(color: _night) : const BoxDecoration(gradient: _musicGradient),
         child: Padding(
           padding: EdgeInsets.all(p(16)),
           child: Row(
@@ -774,7 +827,7 @@ void openWidget(WidgetKind kind, AppState state) {
         return;
       }
       target = state.appFor(Role.photos);
-    case WidgetKind.note || WidgetKind.shortcuts:
+    case WidgetKind.note || WidgetKind.shortcuts || WidgetKind.app:
       break;
     case WidgetKind.weather:
       Native.call(state.permissions['location'] == true ? 'openWeather' : 'openPermission', state.permissions['location'] == true ? null : 'location');

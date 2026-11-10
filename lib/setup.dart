@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'glass.dart';
-import 'icons.dart';
 import 'lock_screen.dart';
 import 'native.dart';
 import 'state.dart';
@@ -10,8 +9,11 @@ const _lockColors = [0xFFFFFFFF, 0xFFFFD60A, 0xFFFF9F0A, 0xFFFF375F, 0xFF64D2FF,
 
 /// The place for permissions, wallpaper and lock screen.
 class SetupScreen extends StatefulWidget {
-  const SetupScreen({super.key, required this.state});
+  const SetupScreen({super.key, required this.state, this.wallpaperOnly = false});
   final AppState state;
+
+  /// Only the wallpapers, for "Hintergrund bearbeiten" in the home screen editor.
+  final bool wallpaperOnly;
 
   @override
   State<SetupScreen> createState() => _SetupScreenState();
@@ -73,42 +75,49 @@ class _SetupScreenState extends State<SetupScreen> with WidgetsBindingObserver {
       builder: (context, _) {
         final lockReady = _state.permissions['notifications'] == true && _state.permissions['overlay'] == true;
         return Scaffold(
-          appBar: AppBar(title: const Text('Anpassen')),
+          appBar: AppBar(title: Text(widget.wallpaperOnly ? 'Hintergrund' : 'Einstellungen')),
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text('Berechtigungen', style: theme.textTheme.titleMedium),
-              _permission('Als Startbildschirm', 'Ersetzt den bisherigen Launcher', 'home', () => Native.call('requestHome')),
-              _permission(
-                'Mitteilungen',
-                'Für Badges, Mitteilungen und den Sperrbildschirm',
-                'notifications',
-                () => Native.call('openPermission', 'notifications'),
-              ),
-              _permission('Über anderen Apps anzeigen', 'Damit der Sperrbildschirm erscheinen darf', 'overlay', () => Native.call('openPermission', 'overlay')),
-              _permission('Systemeinstellungen ändern', 'Für den Helligkeitsregler', 'writeSettings', () => Native.call('openPermission', 'writeSettings')),
-              _permission(
-                'Doppeltippen zum Ausschalten',
-                'Bedienungshilfe „Glas Bildschirm aus“. Sie liest keine Inhalte',
-                'screenOff',
-                () => Native.call('openPermission', 'screenOff'),
-              ),
-              _permission('Fotos', 'Für das Fotos-Widget. Bilder bleiben auf dem Gerät', 'photos', () => Native.call('openPermission', 'photos')),
-              _permission(
-                'Standort',
-                'Für das Wetter. Nur der ungefähre Ort geht an open-meteo.com',
-                'location',
-                () => Native.call('openPermission', 'location'),
-              ),
-              _permission('Kalender', 'Für die Termine in den Widgets', 'calendar', () => Native.call('openPermission', 'calendar')),
-              const Divider(height: 32),
-              Text('Home-Bildschirm', style: theme.textTheme.titleMedium),
-              _option('Große Icons', 'Ohne App-Namen, wie die große Darstellung in iOS', _settings.largeIcons, (v) => _settings.largeIcons = v),
-              _option('Hintergrund weichzeichnen', null, _settings.blurHome, (v) => _settings.blurHome = v),
-              _option('Hintergrund abdunkeln', null, _settings.dimHome, (v) => _settings.dimHome = v),
-              _option('Perspektive-Zoom', 'Der Hintergrund bewegt sich beim Neigen mit', _settings.perspective, (v) => _settings.perspective = v),
-              const Divider(height: 32),
-              Text('Hintergrund', style: theme.textTheme.titleMedium),
+              if (!widget.wallpaperOnly) ...[
+                Text('Berechtigungen', style: theme.textTheme.titleMedium),
+                _permission('Als Startbildschirm', 'Ersetzt den bisherigen Launcher', 'home', () => Native.call('requestHome')),
+                _permission(
+                  'Mitteilungen',
+                  'Für Badges, Mitteilungen und den Sperrbildschirm',
+                  'notifications',
+                  () => Native.call('openPermission', 'notifications'),
+                ),
+                _permission(
+                  'Über anderen Apps anzeigen',
+                  'Damit der Sperrbildschirm erscheinen darf',
+                  'overlay',
+                  () => Native.call('openPermission', 'overlay'),
+                ),
+                _permission('Systemeinstellungen ändern', 'Für den Helligkeitsregler', 'writeSettings', () => Native.call('openPermission', 'writeSettings')),
+                _permission(
+                  'Doppeltippen zum Ausschalten',
+                  'Bedienungshilfe „Glas Bildschirm aus“. Sie liest keine Inhalte',
+                  'screenOff',
+                  () => Native.call('openPermission', 'screenOff'),
+                ),
+                _permission('Fotos', 'Für das Fotos-Widget. Bilder bleiben auf dem Gerät', 'photos', () => Native.call('openPermission', 'photos')),
+                _permission(
+                  'Standort',
+                  'Für das Wetter. Nur der ungefähre Ort geht an open-meteo.com',
+                  'location',
+                  () => Native.call('openPermission', 'location'),
+                ),
+                _permission('Kalender', 'Für die Termine in den Widgets', 'calendar', () => Native.call('openPermission', 'calendar')),
+                const Divider(height: 32),
+                Text('Home-Bildschirm', style: theme.textTheme.titleMedium),
+                _option('Große Icons', 'Ohne App-Namen, wie die große Darstellung in iOS', _settings.largeIcons, (v) => _settings.largeIcons = v),
+                _option('Hintergrund weichzeichnen', null, _settings.blurHome, (v) => _settings.blurHome = v),
+                _option('Hintergrund abdunkeln', null, _settings.dimHome, (v) => _settings.dimHome = v),
+                _option('Perspektive-Zoom', 'Der Hintergrund bewegt sich beim Neigen mit', _settings.perspective, (v) => _settings.perspective = v),
+                const Divider(height: 32),
+                Text('Hintergrund', style: theme.textTheme.titleMedium),
+              ],
               const SizedBox(height: 12),
               _LookGallery(state: _state),
               const SizedBox(height: 20),
@@ -148,26 +157,28 @@ class _SetupScreenState extends State<SetupScreen> with WidgetsBindingObserver {
                   _state.commit();
                 },
               ),
-              const Divider(height: 32),
-              Text('Sperrbildschirm', style: theme.textTheme.titleMedium),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Glas-Sperrbildschirm'),
-                subtitle: Text(
-                  lockReady
-                      ? 'Erscheint vor der System-Sperre. PIN und Fingerabdruck bleiben aktiv.'
-                      : 'Braucht die Rechte für Mitteilungen und „Über anderen Apps“.',
+              if (!widget.wallpaperOnly) ...[
+                const Divider(height: 32),
+                Text('Sperrbildschirm', style: theme.textTheme.titleMedium),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Glas-Sperrbildschirm'),
+                  subtitle: Text(
+                    lockReady
+                        ? 'Erscheint vor der System-Sperre. PIN und Fingerabdruck bleiben aktiv.'
+                        : 'Braucht die Rechte für Mitteilungen und „Über anderen Apps“.',
+                  ),
+                  value: _settings.lockEnabled && lockReady,
+                  onChanged: lockReady ? _toggleLock : null,
                 ),
-                value: _settings.lockEnabled && lockReady,
-                onChanged: lockReady ? _toggleLock : null,
-              ),
-              _option('StandBy', 'Beim Laden quer gelegt: große Uhr und Widgets, nachts rot', _settings.standBy, (v) => _settings.standBy = v),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.brush_outlined),
-                title: const Text('Sperrbildschirm gestalten'),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LockEditor(state: _state))),
-              ),
+                _option('StandBy', 'Beim Laden quer gelegt: große Uhr und Widgets, nachts rot', _settings.standBy, (v) => _settings.standBy = v),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.brush_outlined),
+                  title: const Text('Sperrbildschirm gestalten'),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LockEditor(state: _state))),
+                ),
+              ],
             ],
           ),
         );
@@ -740,110 +751,6 @@ class ReadySheet extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Bottom sheet of the iOS home screen editor. The home screen stays visible behind it, so
-/// a style can be judged on the real icons.
-class IconStyleSheet extends StatelessWidget {
-  const IconStyleSheet({super.key, required this.state});
-  final AppState state;
-
-  void _set(IconStyle style) {
-    state.settings
-      ..iconStyle = style.name
-      ..applyIconStyle();
-    state.commit();
-  }
-
-  void _tint(int color) {
-    state.settings
-      ..iconTint = color
-      ..applyIconStyle();
-    state.commit();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = Ios.of(context);
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(onTap: () => Navigator.of(context).pop(), behavior: HitTestBehavior.opaque),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(p(12), 0, p(12), p(12)),
-              child: Glass(
-                radius: p(38),
-                tint: 0.34,
-                dark: true,
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(p(16), p(20), p(16), p(20)),
-                  child: ListenableBuilder(
-                    listenable: state,
-                    builder: (context, _) => Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('App-Icons', style: sf(p(17), weight: 600)),
-                        SizedBox(height: p(16)),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            for (final style in IconStyle.values)
-                              GestureDetector(
-                                onTap: () => _set(style),
-                                child: Column(
-                                  children: [
-                                    Container(
-                                      padding: EdgeInsets.all(p(3)),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(p(18)),
-                                        border: Border.all(color: style == IconStyle.current ? Colors.white : Colors.transparent, width: 2),
-                                      ),
-                                      child: AppIcon(app: state.appFor(Role.phone), size: p(58), style: style),
-                                    ),
-                                    SizedBox(height: p(6)),
-                                    Text(style.label, style: sf(p(13), weight: 500)),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                        if (IconStyle.current == IconStyle.tinted) ...[
-                          SizedBox(height: p(16)),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              for (final color in iconTints)
-                                GestureDetector(
-                                  onTap: () => _tint(color),
-                                  child: Container(
-                                    width: p(32),
-                                    height: p(32),
-                                    decoration: BoxDecoration(
-                                      color: Color(color),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: color == state.settings.iconTint ? Colors.white : Colors.transparent, width: 2.5),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

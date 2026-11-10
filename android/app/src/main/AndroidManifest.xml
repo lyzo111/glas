@@ -99,6 +99,9 @@
             <action android:name="android.media.action.STILL_IMAGE_CAMERA_SECURE"/>
         </intent>
         <intent>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+        </intent>
+        <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>

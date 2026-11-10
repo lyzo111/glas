@@ -27,13 +27,19 @@ enum WidgetKind {
   note('Notiz', [WidgetSize.small, WidgetSize.medium]),
   shortcuts('Kurzbefehle', [WidgetSize.medium, WidgetSize.small]),
   photos('Fotos', [WidgetSize.small, WidgetSize.medium, WidgetSize.large]),
-  date('Datum', [WidgetSize.small]);
+  date('Datum', [WidgetSize.small]),
+
+  /// A widget of another app, drawn by Android; see appwidgets.dart.
+  app('Widget', [WidgetSize.small, WidgetSize.medium, WidgetSize.large]);
 
   const WidgetKind(this.label, this.sizes);
   final String label;
 
   /// The first size is the one a new widget gets.
   final List<WidgetSize> sizes;
+
+  /// Drawn by Glas itself, so it can go into stacks and the Today view.
+  bool get builtIn => this != app;
 }
 
 /// Something on the home screen. [id] is stable across rearranging.
@@ -70,7 +76,10 @@ sealed class HomeItem {
     };
     final saved = j['size'] as String?;
     final stack = [for (final name in j['stack'] as List? ?? const []) ?WidgetKind.values.asNameMap()[name]];
-    return WidgetItem(j['id'] as String, kind, saved == null ? size : WidgetSize.values.byName(saved), stack);
+    return WidgetItem(j['id'] as String, kind, saved == null ? size : WidgetSize.values.byName(saved), stack)
+      ..hostId = j['hostId'] as int?
+      ..provider = j['provider'] as String?
+      ..title = j['title'] as String?;
   }
 }
 
@@ -112,6 +121,12 @@ class WidgetItem extends HomeItem {
   WidgetKind kind;
   WidgetSize size;
 
+  /// Only for [WidgetKind.app]: the id Android's widget host gave it, the provider it
+  /// shows, and the name of its app.
+  int? hostId;
+  String? provider;
+  String? title;
+
   @override
   int get width => size.width;
 
@@ -125,6 +140,9 @@ class WidgetItem extends HomeItem {
     'kind': kind.name,
     'size': size.name,
     if (stack.isNotEmpty) 'stack': [for (final k in stack) k.name],
+    if (hostId != null) 'hostId': hostId,
+    if (provider != null) 'provider': provider,
+    if (title != null) 'title': title,
     ..._cell,
   };
 }
@@ -486,7 +504,7 @@ class HomeLayout {
 
   /// A new widget goes into the first gap on [page] that fits it, so nothing moves. Without
   /// one it gets a page of its own right after.
-  void addWidget(WidgetKind kind, int page, [WidgetSize? size]) {
+  WidgetItem addWidget(WidgetKind kind, int page, [WidgetSize? size]) {
     final item = WidgetItem(_id('widget'), kind, size);
     final spot = freeSpot(page, item.width, item.height);
     if (spot != null) {
@@ -495,6 +513,7 @@ class HomeLayout {
       pages.insert(page + 1, [item]);
       _tidy();
     }
+    return item;
   }
 
   /// Top left cell of the first free area of this size; widgets keep to iOS's columns.

@@ -233,7 +233,8 @@ class _FolderViewState extends State<FolderView> {
   }
 }
 
-/// Search over apps, with a calculator and web search as fallbacks.
+/// The iOS search: suggested apps while the field is empty, then the best matches on cards
+/// of glass, with a calculator and the web as fallbacks.
 class Spotlight extends StatefulWidget {
   const Spotlight({super.key, required this.state});
   final AppState state;
@@ -243,47 +244,206 @@ class Spotlight extends StatefulWidget {
 }
 
 class _SpotlightState extends State<Spotlight> {
+  final _text = TextEditingController();
   String _query = '';
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
 
   void _open(AppInfo app, BuildContext iconContext) {
     widget.state.launch(app, iconContext);
     Navigator.of(context).pop();
   }
 
+  void _web() => Native.call('webSearch', _query.trim());
+
+  /// iOS suggests eight apps: here the ones used last, filled up with others.
+  List<AppInfo> _suggestions() {
+    final apps = widget.state.apps;
+    final picked = <AppInfo>[for (final key in widget.state.settings.recent) ?apps[key]];
+    for (final app in apps.values) {
+      if (picked.length >= 8) break;
+      if (!picked.contains(app)) picked.add(app);
+    }
+    return picked.take(8).toList();
+  }
+
+  Widget _card(Ios p, Widget child) => Padding(
+    padding: EdgeInsets.only(bottom: p(16)),
+    // The backdrop already blurs; the cards only tint it.
+    child: Glass(radius: p(26), tint: 0.16, blur: false, child: child),
+  );
+
+  Widget _heading(Ios p, String text) => Padding(
+    padding: EdgeInsets.fromLTRB(p(14), 0, p(14), p(8)),
+    child: Text(text, style: sf(p(20), weight: 700)),
+  );
+
+  Widget _symbol(Ios p, IconData icon) => Container(
+    width: p(40),
+    height: p(40),
+    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), shape: BoxShape.circle),
+    child: Icon(icon, size: p(22), color: Colors.white),
+  );
+
+  Widget _row(Ios p, {required Widget leading, required String title, String? detail, required VoidCallback onTap}) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Padding(
+      padding: EdgeInsets.symmetric(horizontal: p(14), vertical: p(9)),
+      child: Row(
+        children: [
+          leading,
+          SizedBox(width: p(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(p(17))),
+                if (detail != null)
+                  Text(
+                    detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: sf(p(13), color: Colors.white.withValues(alpha: 0.6)),
+                  ),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, size: p(22), color: Colors.white.withValues(alpha: 0.4)),
+        ],
+      ),
+    ),
+  );
+
+  /// Rows on one card, parted by the hairlines of an iOS list.
+  Widget _list(Ios p, List<Widget> rows) => _card(
+    p,
+    Column(
+      children: [
+        for (final (index, row) in rows.indexed) ...[
+          if (index > 0)
+            Container(
+              height: 0.5,
+              margin: EdgeInsets.only(left: p(66)),
+              color: Colors.white.withValues(alpha: 0.22),
+            ),
+          row,
+        ],
+      ],
+    ),
+  );
+
+  Widget _grid(Ios p, List<AppInfo> apps) => _card(
+    p,
+    Padding(
+      padding: EdgeInsets.fromLTRB(p(6), p(16), p(6), p(4)),
+      child: Column(
+        children: [
+          for (var start = 0; start < apps.length; start += 4)
+            Padding(
+              padding: EdgeInsets.only(bottom: p(12)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var column = 0; column < 4; column++)
+                    Expanded(
+                      child: start + column >= apps.length
+                          ? const SizedBox()
+                          : Builder(
+                              builder: (iconContext) => GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _open(apps[start + column], iconContext),
+                                child: Column(
+                                  children: [
+                                    AppIcon(app: apps[start + column], size: p(58)),
+                                    SizedBox(height: p(6)),
+                                    Text(
+                                      apps[start + column].name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: sf(p(12), weight: 500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
+    final p = Ios.of(context);
     final q = _query.trim().toLowerCase();
     final result = q.isEmpty ? null : calculate(q);
     final matches = q.isEmpty
-        ? [for (final key in state.settings.recent) ?state.apps[key]]
+        ? <AppInfo>[]
         : (state.apps.values.where((a) => a.matches(q)).toList()..sort((a, b) {
             final x = a.name.toLowerCase().startsWith(q) ? 0 : 1, y = b.name.toLowerCase().startsWith(q) ? 0 : 1;
             return x != y ? x - y : a.name.compareTo(b.name);
           }));
     final showSettings = q.isNotEmpty && 'einstellungen glas anpassen sperrbildschirm'.contains(q);
-    final p = Ios.of(context);
+    final suggestions = q.isEmpty ? _suggestions() : const <AppInfo>[];
+
     final field = Glass(
       radius: p(24),
-      tint: 0.14,
-      child: TextField(
-        autofocus: true,
-        style: sf(p(17)),
-        cursorColor: const Color(0xFF0A84FF),
-        decoration: InputDecoration(
-          hintText: 'Suchen',
-          hintStyle: sf(p(17), color: Colors.white.withValues(alpha: 0.7)),
-          prefixIcon: Icon(Icons.search_rounded, color: Colors.white.withValues(alpha: 0.8), size: p(21)),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: p(13)),
+      tint: 0.18,
+      child: SizedBox(
+        height: p(48),
+        child: Row(
+          children: [
+            SizedBox(width: p(14)),
+            Icon(Icons.search_rounded, color: Colors.white.withValues(alpha: 0.8), size: p(21)),
+            SizedBox(width: p(8)),
+            Expanded(
+              child: TextField(
+                controller: _text,
+                autofocus: true,
+                style: sf(p(17)),
+                cursorColor: const Color(0xFF0A84FF),
+                decoration: InputDecoration(
+                  hintText: 'Suchen',
+                  hintStyle: sf(p(17), color: Colors.white.withValues(alpha: 0.7)),
+                  border: InputBorder.none,
+                  isCollapsed: true,
+                ),
+                textInputAction: TextInputAction.search,
+                onChanged: (v) => setState(() => _query = v),
+                onSubmitted: (v) {
+                  if (v.trim().isNotEmpty) _web();
+                },
+              ),
+            ),
+            if (_query.isEmpty)
+              SizedBox(width: p(14))
+            else
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  _text.clear();
+                  setState(() => _query = '');
+                },
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: p(13)),
+                  child: Icon(Icons.cancel_rounded, size: p(19), color: Colors.white.withValues(alpha: 0.6)),
+                ),
+              ),
+          ],
         ),
-        textInputAction: TextInputAction.search,
-        onChanged: (v) => setState(() => _query = v),
-        onSubmitted: (v) {
-          if (v.trim().isNotEmpty) Native.call('webSearch', v.trim());
-        },
       ),
     );
+
     return Backdrop(
       dim: 0.45,
       child: Padding(
@@ -298,46 +458,58 @@ class _SpotlightState extends State<Spotlight> {
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
+                physics: const BouncingScrollPhysics(),
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 children: [
+                  if (suggestions.isNotEmpty) ...[_heading(p, 'Vorschläge'), _grid(p, suggestions)],
                   if (result != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        '= ${_number(result)}',
-                        style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w300),
+                    _card(
+                      p,
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(p(16), p(12), p(16), p(14)),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Rechner', style: sf(p(13), weight: 600, color: Colors.white.withValues(alpha: 0.6))),
+                                  SizedBox(height: p(2)),
+                                  Text('= ${_number(result)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(p(34), weight: 300, height: 1.15)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  if (q.isEmpty && matches.isNotEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        'Zuletzt verwendet',
-                        style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  for (final app in matches.take(12))
-                    Builder(
-                      builder: (iconContext) => ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: AppIcon(app: app, size: p(44)),
-                        title: Text(app.name, style: sf(p(17))),
-                        onTap: () => _open(app, iconContext),
-                      ),
-                    ),
-                  if (showSettings)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.tune, color: Colors.white, size: 36),
-                      title: const Text('Glas anpassen', style: TextStyle(color: Colors.white)),
-                      onTap: () => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => SetupScreen(state: state))),
-                    ),
-                  if (q.isNotEmpty)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.public, color: Colors.white, size: 36),
-                      title: Text('„${_query.trim()}“ im Web suchen', style: const TextStyle(color: Colors.white)),
-                      onTap: () => Native.call('webSearch', _query.trim()),
-                    ),
+                  if (matches.isNotEmpty || showSettings) ...[
+                    _heading(p, 'Top-Treffer'),
+                    _list(p, [
+                      for (final app in matches.take(8))
+                        Builder(
+                          builder: (iconContext) => _row(
+                            p,
+                            leading: AppIcon(app: app, size: p(40)),
+                            title: app.name,
+                            detail: 'App',
+                            onTap: () => _open(app, iconContext),
+                          ),
+                        ),
+                      if (showSettings)
+                        _row(
+                          p,
+                          leading: _symbol(p, Icons.tune_rounded),
+                          title: 'Glas anpassen',
+                          detail: 'Einstellungen',
+                          onTap: () => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => SetupScreen(state: state))),
+                        ),
+                    ]),
+                  ],
+                  if (q.isNotEmpty) ...[
+                    _heading(p, 'Im Web suchen'),
+                    _list(p, [_row(p, leading: _symbol(p, Icons.search_rounded), title: _query.trim(), detail: 'Websuche', onTap: _web)]),
+                  ],
                 ],
               ),
             ),

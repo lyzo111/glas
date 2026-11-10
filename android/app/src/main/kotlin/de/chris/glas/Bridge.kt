@@ -64,6 +64,9 @@ import java.io.File
 import java.util.concurrent.Executors
 
 /** Everything Dart needs from Android, shared by the home and lock screens. */
+/** Icons are drawn this large; the biggest one on screen is about 215 pixels wide. */
+private const val ICON_PX = 288
+
 class Bridge(
     private val activity: Activity,
     messenger: BinaryMessenger,
@@ -373,15 +376,20 @@ class Bridge(
     /** Full-bleed square; Dart clips it to the rounded icon shape. */
     private fun iconPng(pkg: String, cls: String, layer: String): ByteArray? {
         val info = find(pkg, cls) ?: return null
-        val size = 256
+        val size = ICON_PX
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val icon: Drawable = info.getIcon(activity.resources.displayMetrics.densityDpi)
+        // The highest density there is: Glas draws icons larger than Android's launchers do.
+        val icon: Drawable = info.getIcon(DisplayMetrics.DENSITY_XXXHIGH)
+        var mask = layer == "mono"
+        // How many pixels an icon without any transparency would cover.
+        var area = size * size
         if (icon is AdaptiveIconDrawable) {
             // Adaptive layers are 108 units wide with the visible part in the middle 72.
             val extra = size / 4
-            val monochrome = if (layer == "mono" && Build.VERSION.SDK_INT >= 33) icon.monochrome?.mutate() else null
+            val monochrome = if (mask && Build.VERSION.SDK_INT >= 33) icon.monochrome?.mutate() else null
             monochrome?.setTint(Color.WHITE)
+            if (monochrome != null) mask = false
             val layers = when {
                 monochrome != null -> listOf(monochrome)
                 layer == "plain" -> listOf(icon.background, icon.foreground)
@@ -396,11 +404,60 @@ class Bridge(
             val inset = size / 8
             icon.setBounds(inset, inset, size - inset, size - inset)
             icon.draw(canvas)
+            area = (size - 2 * inset) * (size - 2 * inset)
         }
+        if (mask) toMask(bitmap, area)
         return ByteArrayOutputStream().use {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
             it.toByteArray()
         }
+    }
+
+    private fun luma(pixel: Int) = (Color.red(pixel) * 54 + Color.green(pixel) * 183 + Color.blue(pixel) * 19) shr 8
+
+    /**
+     * Turns a drawn icon into white with its shape in the alpha channel, for the glass icon
+     * styles, which colour it themselves. The edges keep their soft pixels that way. An app
+     * without a monochrome layer gets one made from brightness: a glyph on a clear ground keeps
+     * its outline, and of a picture that fills the icon, what stands out from its ground shows.
+     */
+    private fun toMask(bitmap: Bitmap, area: Int) {
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        val histogram = IntArray(256)
+        var solid = 0
+        for (pixel in pixels) {
+            if (pixel ushr 24 < 128) continue
+            histogram[luma(pixel)]++
+            solid++
+        }
+        if (solid == 0) return
+        fun percentile(share: Double): Int {
+            var seen = 0
+            for (value in 0..255) {
+                seen += histogram[value]
+                if (seen >= solid * share) return value
+            }
+            return 255
+        }
+        val low = percentile(0.02)
+        val high = percentile(0.98)
+        val ground = percentile(0.5)
+        val full = solid > area * 0.72
+        val spread = if (full) maxOf(high - ground, ground - low) else high - low
+        for (i in pixels.indices) {
+            val alpha = pixels[i] ushr 24
+            val value = luma(pixels[i])
+            val share = when {
+                alpha == 0 -> 0f
+                full && spread < 24 -> 0.3f
+                full -> ((Math.abs(value - ground) / spread.toFloat() - 0.15f) / 0.85f).coerceIn(0f, 1f)
+                spread < 40 -> 1f
+                else -> 0.45f + 0.55f * ((value - low) / spread.toFloat()).coerceIn(0f, 1f)
+            }
+            pixels[i] = ((alpha * share).toInt() shl 24) or 0xFFFFFF
+        }
+        bitmap.setPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
     }
 
     /** The system's reveal animation grows the app out of its icon. */

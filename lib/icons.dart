@@ -205,14 +205,7 @@ class _RolePainter extends CustomPainter {
         canvas.drawPath(flap, _line(dark ? const Color(0xFF0E0E10) : const Color(0xFF1F8FF2), 0.028));
         canvas.restore();
       case Role.camera:
-        _fill(const Color(0xFFE3E4E6), const Color(0xFF8E9096));
-        final body = dark ? const Color(0xFF8E9096) : const Color(0xFF2C2C2E);
-        canvas.drawRRect(_rr(0.13, 0.30, 0.87, 0.76, 0.08), _solid(body));
-        canvas.drawRRect(_rr(0.36, 0.23, 0.64, 0.36, 0.05), _solid(body));
-        canvas.drawCircle(_p(0.5, 0.53), 0.175 * _s, _solid(const Color(0xFFB9BBC0)));
-        canvas.drawCircle(_p(0.5, 0.53), 0.135 * _s, _solid(body));
-        canvas.drawCircle(_p(0.5, 0.53), 0.075 * _s, _solid(const Color(0xFF4A4E5A)));
-        canvas.drawCircle(_p(0.77, 0.39), 0.022 * _s, _solid(const Color(0xFFFFD60A)));
+        _camera();
       case Role.photos:
         _photos();
       case Role.music:
@@ -406,54 +399,133 @@ class _RolePainter extends CustomPainter {
     _c.drawCircle(center, 0.03 * _s, _solid(const Color(0xFFFF9500)));
   }
 
-  /// iOS 26's Settings icon: a light silver cog with fine teeth on a graphite tile; inside a
-  /// dark ring with a band of small teeth, and three spokes meeting at the hub.
+  /// iOS 26's Camera icon: nothing but a large lens. Its glass catches a cool light at the
+  /// top and a warm one below; on the dark and the glass tile the barrel is two fine rings.
+  void _camera() {
+    _fill(Colors.white, const Color(0xFFD0D1D7));
+    final c = _p(0.5, 0.5);
+    Rect disc(double r) => Rect.fromCircle(center: c, radius: r * _s);
+    Paint shade(double r, List<Color> colors) =>
+        Paint()..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: colors).createShader(disc(r));
+    Paint glow(Color color, double blur) => Paint()
+      ..color = color
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur * _s);
+
+    final double glass;
+    if (dark) {
+      glass = 0.338;
+      _c.drawCircle(c, 0.386 * _s, _line(const Color(0xFFD2D2D6), 0.024));
+      _c.drawCircle(c, 0.35 * _s, _line(const Color(0xFF85858A), 0.012));
+    } else {
+      glass = 0.29;
+      _c.drawCircle(c + Offset(0, 0.014 * _s), 0.372 * _s, glow(const Color(0x40000000), 0.018));
+      // Brushed metal outside, a bevel that catches the light from below, then the dark barrel.
+      _c.drawCircle(c, 0.372 * _s, shade(0.372, const [Color(0xFFF6F6F8), Color(0xFF8B8C93)]));
+      _c.drawCircle(c, 0.338 * _s, shade(0.338, const [Color(0xFF63646A), Color(0xFFC4C5CA)]));
+      _c.drawCircle(c, 0.318 * _s, shade(0.318, const [Color(0xFF3B3C42), Color(0xFF141518)]));
+    }
+    _c.drawCircle(
+      c,
+      glass * _s,
+      Paint()
+        ..shader = RadialGradient(
+          colors: dark ? const [Color(0xFF1B1B1F), Color(0xFF09090B)] : const [Color(0xFF27315E), Color(0xFF0B0F24), Color(0xFF04050C)],
+          stops: dark ? null : const [0, 0.62, 1],
+        ).createShader(disc(glass)),
+    );
+    _c.save();
+    _c.clipPath(Path()..addOval(disc(glass)));
+    // The elements of the lens show as faint rings in the glass.
+    _c.drawCircle(c, glass * 0.74 * _s, _line(Colors.white.withValues(alpha: 0.08), 0.01));
+    _c.drawCircle(c, glass * 0.46 * _s, _line(Colors.white.withValues(alpha: 0.07), 0.01));
+    _c.drawOval(
+      Rect.fromCenter(center: c + Offset(dark ? 0 : -0.05, -0.125) * _s, width: 0.25 * _s, height: 0.15 * _s),
+      glow(dark ? const Color(0xF0FFFFFF) : const Color(0xF0C4DCFF), 0.028),
+    );
+    _c.drawOval(
+      Rect.fromCenter(center: c + Offset(dark ? 0 : 0.05, 0.14) * _s, width: 0.24 * _s, height: 0.085 * _s),
+      glow(dark ? const Color(0x8CFFFFFF) : const Color(0xC0C272FF), 0.026),
+    );
+    if (!dark) {
+      _c.drawOval(Rect.fromCenter(center: c + const Offset(0.11, 0.1) * _s, width: 0.09 * _s, height: 0.06 * _s), glow(const Color(0xA0FF6A7C), 0.022));
+    }
+    _c.drawArc(disc(glass - 0.035), 0.22 * pi, 0.56 * pi, false, _line(Colors.white.withValues(alpha: 0.2), 0.012));
+    _c.restore();
+  }
+
+  /// iOS 26's Settings icon: a cog with fine round teeth, a smaller and dimmer cog inside it,
+  /// and three spokes over both that meet in a hub with hollowed sides.
   void _settings() {
     _fill(const Color(0xFF9D9DA2), const Color(0xFF5E5E63));
     final c = _p(0.5, 0.5);
-    void cog(double outer, double inner, int count, double flat, Paint paint) {
-      final path = Path();
+
+    // A ring from [hole] to [root] with [count] round-tipped teeth reaching [tip].
+    void cog(double tip, double root, double hole, int count, Paint paint) {
+      final width = pi * (tip + root) / count * 0.5 * _s;
+      final tooth = Path()
+        ..addRRect(
+          RRect.fromRectAndCorners(
+            Rect.fromLTRB(-width / 2, -tip * _s, width / 2, -(root - 0.012) * _s),
+            topLeft: Radius.circular(width / 2),
+            topRight: Radius.circular(width / 2),
+          ),
+        );
+      final teeth = Path();
       for (var i = 0; i < count; i++) {
-        final a = i * 2 * pi / count;
-        final half = pi / count;
-        final corners = [(a - half, inner), (a - half * flat, outer), (a + half * flat, outer), (a + half, inner)];
-        for (var j = 0; j < corners.length; j++) {
-          final (angle, r) = corners[j];
-          final p = c + Offset(cos(angle), sin(angle)) * r * _s;
-          i == 0 && j == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
-        }
+        teeth.addPath(tooth, Offset.zero, matrix4: (Matrix4.translationValues(c.dx, c.dy, 0)..rotateZ(i * 2 * pi / count)).storage);
       }
-      _c.drawPath(path..close(), paint);
+      _c.drawPath(teeth, paint);
+      _c.drawCircle(
+        c,
+        (root + hole) / 2 * _s,
+        Paint()
+          ..color = paint.color
+          ..shader = paint.shader
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (root - hole) * _s,
+      );
     }
 
-    Paint silver(double radius) => Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFFFAFAFC), Color(0xFFC9C9CE)],
-      ).createShader(Rect.fromCircle(center: c, radius: radius * _s));
+    // Three arms of [half] the width, [length] long; where two meet, the corner is hollowed
+    // out by an arc that starts [fillet] up each arm.
+    Path spokes(double length, double half, double fillet) {
+      Offset at(double angle, double along, double across) => c + (Offset(cos(angle), sin(angle)) * along + Offset(-sin(angle), cos(angle)) * across) * _s;
+      final inner = half / tan(pi / 3) + fillet;
+      final path = Path();
+      for (var k = 0; k < 3; k++) {
+        final angle = k * 2 * pi / 3, next = angle + 2 * pi / 3;
+        final near = at(angle, length, -half), far = at(angle, length, half), turn = at(angle, inner, half);
+        k == 0 ? path.moveTo(near.dx, near.dy) : path.lineTo(near.dx, near.dy);
+        path
+          ..lineTo(far.dx, far.dy)
+          ..lineTo(turn.dx, turn.dy)
+          ..arcToPoint(at(next, inner, -half), radius: Radius.circular(fillet * tan(pi / 3) * _s), clockwise: false);
+      }
+      return path..close();
+    }
 
-    // Outer cog with a soft shadow below it.
-    _c.save();
-    _c.translate(0, 0.012 * _s);
-    cog(0.43, 0.385, 40, 0.5, _solid(const Color(0x40000000)));
+    final metal = dark
+        ? _solid(const Color(0xFFC8C8CD))
+        : (Paint()
+            ..shader = const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFFAFAFC), Color(0xFFCDCDD2)],
+            ).createShader(Rect.fromCircle(center: c, radius: 0.4 * _s)));
+
+    if (!dark) {
+      _c.save();
+      _c.translate(0, 0.012 * _s);
+      cog(0.396, 0.35, 0.29, 38, _solid(const Color(0x38000000)));
+      _c.restore();
+    }
+    // The hub's hole has to cut through to the tile, whatever is on it.
+    _c.saveLayer(Offset.zero & Size.square(_s), Paint());
+    cog(0.238, 0.208, 0.15, 24, _solid(dark ? const Color(0xFF85858A) : const Color(0xFFB4B4B9)));
+    cog(0.396, 0.35, 0.29, 38, metal);
+    _c.drawPath(spokes(0.3, 0.04, 0.085), metal);
+    _c.drawCircle(c, 0.03 * _s, Paint()..blendMode = BlendMode.clear);
     _c.restore();
-    cog(0.43, 0.385, 40, 0.5, silver(0.43));
-    // Dark recess with a ring of small inward teeth.
-    _c.drawCircle(c, 0.315 * _s, _solid(const Color(0xFF6B6B70)));
-    cog(0.285, 0.255, 40, 0.5, _solid(const Color(0xFFB4B4B9)));
-    _c.drawCircle(c, 0.24 * _s, _solid(const Color(0xFF6B6B70)));
-    // Three spokes and the hub.
-    final spoke = Paint()
-      ..color = const Color(0xFFEFEFF2)
-      ..strokeWidth = 0.05 * _s
-      ..strokeCap = StrokeCap.round;
-    for (final degrees in [-10.0, 110.0, 230.0]) {
-      final a = degrees * pi / 180;
-      _c.drawLine(c, c + Offset(cos(a), sin(a)) * 0.25 * _s, spoke);
-    }
-    _c.drawCircle(c, 0.058 * _s, silver(0.06));
-    _c.drawCircle(c, 0.058 * _s, _line(const Color(0xFF6B6B70), 0.012));
   }
 
   void _calculator() {

@@ -22,11 +22,7 @@ void main() {
     });
 
     test('überlappt nie und meldet den Überlauf', () {
-      final items = <HomeItem>[
-        WidgetItem('t', WidgetKind.music),
-        WidgetItem('c', WidgetKind.clock),
-        for (final k in keys(30)) AppItem(k),
-      ];
+      final items = <HomeItem>[WidgetItem('t', WidgetKind.music), WidgetItem('c', WidgetKind.clock), for (final k in keys(30)) AppItem(k)];
       final slots = pack(items);
       expect(slots, hasLength(2 + 12));
       final cells = <String>{};
