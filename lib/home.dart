@@ -362,23 +362,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         preview: _itemPreview(item),
         actions: [
           for (final (id, label) in shortcuts) QuickAction(label, Icons.bolt, () => Native.call('startShortcut', {'package': app!.package, 'id': id})),
-          if (item is WidgetItem && item.kind.sizes.length > 1)
-            for (final size in WidgetSize.values)
-              if (item.kind.sizes.contains(size))
-                QuickAction(
-                  size.label,
-                  size == item.size
-                      ? Icons.check_rounded
-                      : size == WidgetSize.small
-                      ? Icons.crop_square_rounded
-                      : size == WidgetSize.medium
-                      ? Icons.crop_16_9_rounded
-                      : Icons.crop_din_rounded,
-                  () {
-                    _layout.resize(item, size);
-                    _state.commit();
-                  },
-                ),
+          if (item is WidgetItem && item.sizes.length > 1)
+            for (final size in item.sizes)
+              QuickAction(
+                size.label,
+                size == item.size
+                    ? Icons.check_rounded
+                    : size == WidgetSize.small
+                    ? Icons.crop_square_rounded
+                    : size == WidgetSize.medium
+                    ? Icons.crop_16_9_rounded
+                    : Icons.crop_din_rounded,
+                () {
+                  _layout.resize(item, size);
+                  _state.commit();
+                },
+              ),
           if (item is WidgetItem) QuickAction('Zu Stapel hinzufügen', Icons.layers_outlined, () => _addToStack(item)),
           if (item is WidgetItem && item.stack.isNotEmpty)
             QuickAction('Dieses Widget aus Stapel entfernen', Icons.layers_clear_outlined, () {

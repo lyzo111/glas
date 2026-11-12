@@ -304,6 +304,25 @@ void placementTests() {
       expect([loaded.kind, loaded.hostId, loaded.stack], [WidgetKind.battery, null, isEmpty]);
     });
 
+    test('ein Stapel bietet nur Größen an, die alle seine Widgets haben', () {
+      final clock = WidgetItem('w', WidgetKind.clock);
+      expect(clock.sizes, [WidgetSize.small, WidgetSize.medium]);
+      clock.stack.add(StackEntry(WidgetKind.month));
+      expect(clock.sizes, [WidgetSize.small]);
+      clock.stack.add(StackEntry(WidgetKind.app, hostId: 3));
+      expect(clock.sizes, [WidgetSize.small]);
+      expect(WidgetItem('a', WidgetKind.app, WidgetSize.medium).sizes, WidgetSize.values);
+    });
+
+    test('eine App von einer ausgeblendeten Seite zieht um statt doppelt zu sein', () {
+      final l = HomeLayout()..sync(keys(30));
+      final key = (l.pages[1].first as AppItem).key;
+      l.hidePage(1);
+      l.addApp(key);
+      expect(l.pages.expand((p) => p).where((i) => i.id == key), hasLength(1));
+      expect(l.hidden.expand((p) => p).where((i) => i.id == key), isEmpty);
+    });
+
     test('Position und Größe überstehen Speichern, alte Widgets werden erkannt', () {
       final l = page(2)..addWidget(WidgetKind.weather, 0, WidgetSize.large);
       l.pin(0);

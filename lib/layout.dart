@@ -3,7 +3,9 @@ import 'dart:math';
 const columns = 4;
 const rows = 6;
 const dockSize = 4;
-const folderCapacity = 27;
+
+/// Twelve pages of nine.
+const folderCapacity = 108;
 
 enum WidgetSize {
   small('Klein', 2, 2),
@@ -136,6 +138,16 @@ class WidgetItem extends HomeItem {
         ..provider = entry.provider
         ..title = entry.title,
   ];
+
+  /// The sizes this item can take: those every widget in its stack has. A stack holding
+  /// another app's widget keeps its size, since that widget was picked for it.
+  List<WidgetSize> get sizes {
+    if (stack.any((entry) => !entry.kind.builtIn) || (stack.isNotEmpty && !kind.builtIn)) return [size];
+    return [
+      for (final s in WidgetSize.values)
+        if (kind.sizes.contains(s) && stack.every((entry) => entry.kind.sizes.contains(s))) s,
+    ];
+  }
 
   /// What Android's widget host holds for this item, stack included.
   List<int> get hostIds => [?hostId, for (final entry in stack) ?entry.hostId];
@@ -612,6 +624,15 @@ class HomeLayout {
   /// Back on the home screen from the App Library.
   void addApp(String key) {
     if (all.any((i) => i is AppItem && i.key == key)) return;
+    // From a page that is switched off it moves over, so it isn't there twice later.
+    for (final page in hidden) {
+      page.removeWhere((i) => i is AppItem && i.key == key);
+      for (final folder in page.whereType<FolderItem>()) {
+        folder.apps.remove(key);
+      }
+      _dissolveFolders(page);
+    }
+    hidden.removeWhere((page) => page.isEmpty);
     pages.last.add(AppItem(key));
     _tidy();
   }
