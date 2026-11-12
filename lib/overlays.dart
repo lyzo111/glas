@@ -138,9 +138,12 @@ class FolderView extends StatefulWidget {
 
 class _FolderViewState extends State<FolderView> {
   late final _name = TextEditingController(text: widget.folder.name);
+  final _pages = PageController();
+  var _page = 0;
 
   @override
   void dispose() {
+    _pages.dispose();
     _name.dispose();
     super.dispose();
   }
@@ -196,31 +199,44 @@ class _FolderViewState extends State<FolderView> {
                   tint: 0.14,
                   child: Padding(
                     padding: EdgeInsets.all(p(20)),
-                    child: GridView.count(
-                      shrinkWrap: true,
-                      crossAxisCount: 3,
-                      childAspectRatio: 0.84,
-                      mainAxisSpacing: p(8),
-                      physics: const BouncingScrollPhysics(),
-                      children: [
-                        for (final key in apps.take(9))
-                          Builder(
-                            builder: (iconContext) => GestureDetector(
-                              onTap: () {
-                                final app = widget.state.apps[key];
-                                if (app != null) widget.state.launch(app, iconContext);
-                              },
-                              onLongPressStart: (d) => _menu(key, d.globalPosition),
-                              child: Column(
-                                children: [
-                                  AppIcon(app: widget.state.apps[key], size: p.icon, badge: widget.state.badges[widget.state.apps[key]?.package] ?? 0),
-                                  SizedBox(height: p(6)),
-                                  Text(widget.state.apps[key]?.name ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(p(12), weight: 500)),
-                                ],
+                    // Nine apps a page as on iOS; more pages are swiped through, with dots below.
+                    child: LayoutBuilder(
+                      builder: (context, box) {
+                        final gap = p(8);
+                        final cellHeight = box.maxWidth / 3 / _aspect;
+                        final pages = [for (var i = 0; i < apps.length; i += 9) apps.sublist(i, min(i + 9, apps.length))];
+                        final shown = _page.clamp(0, max(pages.length - 1, 0));
+                        if (pages.length < 2) return _grid(p, apps);
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              height: cellHeight * 3 + gap * 2,
+                              child: PageView(
+                                controller: _pages,
+                                onPageChanged: (i) => setState(() => _page = i),
+                                children: [for (final page in pages) _grid(p, page)],
                               ),
                             ),
-                          ),
-                      ],
+                            SizedBox(height: p(12)),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (var i = 0; i < pages.length; i++)
+                                  Container(
+                                    width: p(7),
+                                    height: p(7),
+                                    margin: EdgeInsets.symmetric(horizontal: p(4)),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white.withValues(alpha: i == shown ? 1 : 0.4),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -231,6 +247,37 @@ class _FolderViewState extends State<FolderView> {
       ),
     );
   }
+
+  static const _aspect = 0.84;
+
+  /// One page of the folder.
+  Widget _grid(Ios p, List<String> keys) => GridView.count(
+    shrinkWrap: true,
+    padding: EdgeInsets.zero,
+    crossAxisCount: 3,
+    childAspectRatio: _aspect,
+    mainAxisSpacing: p(8),
+    physics: const NeverScrollableScrollPhysics(),
+    children: [
+      for (final key in keys)
+        Builder(
+          builder: (iconContext) => GestureDetector(
+            onTap: () {
+              final app = widget.state.apps[key];
+              if (app != null) widget.state.launch(app, iconContext);
+            },
+            onLongPressStart: (d) => _menu(key, d.globalPosition),
+            child: Column(
+              children: [
+                AppIcon(app: widget.state.apps[key], size: p.icon, badge: widget.state.badges[widget.state.apps[key]?.package] ?? 0),
+                SizedBox(height: p(6)),
+                Text(widget.state.apps[key]?.name ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(p(12), weight: 500)),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
 }
 
 /// The iOS search: suggested apps while the field is empty, then the best matches on cards

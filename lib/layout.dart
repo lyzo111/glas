@@ -417,7 +417,15 @@ class HomeLayout {
       final item = list[i];
       if (item is FolderItem && item.apps.length < 2) {
         list.removeAt(i);
-        if (item.apps.isNotEmpty) list.insert(i, AppItem(item.apps.single));
+        // The last app takes the folder's place.
+        if (item.apps.isNotEmpty) {
+          list.insert(
+            i,
+            AppItem(item.apps.single)
+              ..column = item.column
+              ..row = item.row,
+          );
+        }
       }
     }
   }

@@ -601,7 +601,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   children: [
                     for (var i = 0; i < _layout.pages.length; i++) thumb(_layout.pages[i], true, () => apply(() => _layout.hidePage(i))),
                     for (var i = 0; i < _layout.hidden.length; i++)
-                      thumb(_layout.hidden[i], false, () => apply(() => _layout.showPage(i)), onDelete: () => apply(() => _layout.deleteHidden(i))),
+                      thumb(
+                        _layout.hidden[i],
+                        false,
+                        () => apply(() => _layout.showPage(i)),
+                        onDelete: () => apply(() {
+                          for (final item in _layout.hidden[i].whereType<WidgetItem>()) {
+                            item.hostIds.forEach(AppWidgets.delete);
+                          }
+                          _layout.deleteHidden(i);
+                        }),
+                      ),
                   ],
                 ),
               ),
