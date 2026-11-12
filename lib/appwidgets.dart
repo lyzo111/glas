@@ -135,8 +135,11 @@ class AppWidgetView extends StatelessWidget {
 
 /// The lower part of the widget gallery: every app that offers widgets, as in the iOS gallery.
 class AppWidgetList extends StatefulWidget {
-  const AppWidgetList({super.key, required this.state, required this.onPick});
+  const AppWidgetList({super.key, required this.state, required this.onPick, this.only});
   final AppState state;
+
+  /// Lists only widgets that have room in this size, for adding to a stack.
+  final WidgetSize? only;
   final void Function(WidgetProvider, WidgetSize) onPick;
 
   @override
@@ -157,6 +160,7 @@ class _AppWidgetListState extends State<AppWidgetList> with AutomaticKeepAliveCl
       if (!mounted) return;
       final byApp = <String, List<WidgetProvider>>{};
       for (final provider in all) {
+        if (widget.only != null && !provider.sizes.contains(widget.only)) continue;
         byApp.putIfAbsent(provider.package, () => []).add(provider);
       }
       setState(() => _apps = byApp.values.toList()..sort((a, b) => a.first.app.toLowerCase().compareTo(b.first.app.toLowerCase())));
@@ -164,7 +168,7 @@ class _AppWidgetListState extends State<AppWidgetList> with AutomaticKeepAliveCl
   }
 
   Future<void> _open(List<WidgetProvider> app) async {
-    final picked = await openOverlay<(WidgetProvider, WidgetSize)>(context, (_) => _AppWidgetSheet(state: widget.state, providers: app));
+    final picked = await openOverlay<(WidgetProvider, WidgetSize)>(context, (_) => _AppWidgetSheet(state: widget.state, providers: app, only: widget.only));
     if (picked != null) widget.onPick(picked.$1, picked.$2);
   }
 
@@ -239,8 +243,9 @@ class _AppWidgetListState extends State<AppWidgetList> with AutomaticKeepAliveCl
 
 /// The widgets of one app, each with the sizes it has room in.
 class _AppWidgetSheet extends StatelessWidget {
-  const _AppWidgetSheet({required this.state, required this.providers});
+  const _AppWidgetSheet({required this.state, required this.providers, this.only});
   final AppState state;
+  final WidgetSize? only;
   final List<WidgetProvider> providers;
 
   @override
@@ -284,7 +289,7 @@ class _AppWidgetSheet extends StatelessWidget {
                           children: [
                             GestureDetector(
                               behavior: HitTestBehavior.opaque,
-                              onTap: () => Navigator.of(context).pop((provider, provider.preferred)),
+                              onTap: () => Navigator.of(context).pop((provider, only ?? provider.preferred)),
                               child: Container(
                                 height: p(150),
                                 alignment: Alignment.centerLeft,
@@ -305,13 +310,13 @@ class _AppWidgetSheet extends StatelessWidget {
                             Wrap(
                               spacing: p(8),
                               children: [
-                                for (final size in provider.sizes)
+                                for (final size in only == null ? provider.sizes : [only!])
                                   GestureDetector(
                                     onTap: () => Navigator.of(context).pop((provider, size)),
                                     child: Container(
                                       padding: EdgeInsets.symmetric(horizontal: p(14), vertical: p(7)),
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: size == provider.preferred ? 0.3 : 0.14),
+                                        color: Colors.white.withValues(alpha: size == (only ?? provider.preferred) ? 0.3 : 0.14),
                                         borderRadius: BorderRadius.circular(p(16)),
                                       ),
                                       child: Text(size.label, style: sf(p(14), weight: 600)),

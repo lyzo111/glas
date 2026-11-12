@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import 'appwidgets.dart';
 import 'glass.dart';
 import 'icons.dart';
 import 'layout.dart';
@@ -843,9 +844,22 @@ final stackPage = <String, int>{};
 /// iOS's widget stack: widgets of one size in one place, swiped through vertically, with
 /// dots at the side telling where in the stack one is.
 class WidgetStack extends StatefulWidget {
-  const WidgetStack({super.key, required this.id, required this.kinds, required this.size, required this.state, required this.scale});
+  const WidgetStack({
+    super.key,
+    required this.id,
+    required this.faces,
+    required this.size,
+    required this.state,
+    required this.scale,
+    this.live = false,
+    this.locked = false,
+  });
   final String id;
-  final List<WidgetKind> kinds;
+  final List<WidgetItem> faces;
+
+  /// For widgets of other apps in the stack, as in [AppWidgetView].
+  final bool live;
+  final bool locked;
   final WidgetSize size;
   final AppState state;
   final double scale;
@@ -894,7 +908,12 @@ class _WidgetStackState extends State<WidgetStack> {
           controller: _pages,
           scrollDirection: Axis.vertical,
           onPageChanged: (i) => setState(() => stackPage[widget.id] = i),
-          children: [for (final kind in widget.kinds) HomeWidget(kind: kind, size: widget.size, state: widget.state, scale: widget.scale)],
+          children: [
+            for (final face in widget.faces)
+              face.kind == WidgetKind.app
+                  ? AppWidgetView(item: face, live: widget.live, locked: widget.locked)
+                  : HomeWidget(kind: face.kind, size: widget.size, state: widget.state, scale: widget.scale),
+          ],
         ),
         Positioned(
           right: -p(13),
@@ -906,7 +925,7 @@ class _WidgetStackState extends State<WidgetStack> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  for (var i = 0; i < widget.kinds.length; i++)
+                  for (var i = 0; i < widget.faces.length; i++)
                     Container(
                       width: p(5),
                       height: p(5),

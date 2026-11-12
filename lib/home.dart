@@ -379,10 +379,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     _state.commit();
                   },
                 ),
-          if (item is WidgetItem && item.kind.builtIn) QuickAction('Zu Stapel hinzufügen', Icons.layers_outlined, () => _addToStack(item)),
+          if (item is WidgetItem) QuickAction('Zu Stapel hinzufügen', Icons.layers_outlined, () => _addToStack(item)),
           if (item is WidgetItem && item.stack.isNotEmpty)
             QuickAction('Dieses Widget aus Stapel entfernen', Icons.layers_clear_outlined, () {
-              _layout.removeFromStack(item, (stackPage[item.id] ?? 0).clamp(0, item.stack.length));
+              final hostId = _layout.removeFromStack(item, (stackPage[item.id] ?? 0).clamp(0, item.stack.length));
+              if (hostId != null) AppWidgets.delete(hostId);
               stackPage[item.id] = 0;
               _state.commit();
             }),
@@ -425,7 +426,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
     _layout.remove(item);
     // Android keeps a hosted widget alive until its id is given back.
-    if (item is WidgetItem && item.hostId != null) AppWidgets.delete(item.hostId!);
+    if (item is WidgetItem) item.hostIds.forEach(AppWidgets.delete);
     _state.commit();
   }
 
@@ -471,7 +472,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       state: _state,
       only: item.size,
       onPick: (kind, _) {
-        item.stack.add(kind);
+        item.stack.add(StackEntry(kind));
+        _state.commit();
+      },
+      onPickApp: (provider, _) async {
+        final id = await AppWidgets.bind(provider.id);
+        if (id == null) return;
+        item.stack.add(StackEntry(WidgetKind.app, hostId: id, provider: provider.id, title: provider.app));
         _state.commit();
       },
     ),
@@ -705,11 +712,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       WidgetItem() => SizedBox(
         width: item.width == 4 ? p.fullWidth : p.smallWidth,
         height: p.icon + (item.height - 1) * p.rowPitch,
-        child: item.kind == WidgetKind.app
+        child: item.stack.isNotEmpty
+            ? WidgetStack(id: item.id, faces: item.faces, size: item.size, state: _state, scale: p.unit, live: live, locked: _editing)
+            : item.kind == WidgetKind.app
             ? AppWidgetView(item: item, live: live, locked: _editing)
-            : item.stack.isEmpty
-            ? HomeWidget(kind: item.kind, size: item.size, state: _state, scale: p.unit)
-            : WidgetStack(id: item.id, kinds: [item.kind, ...item.stack], size: item.size, state: _state, scale: p.unit),
+            : HomeWidget(kind: item.kind, size: item.size, state: _state, scale: p.unit),
       ),
       GapItem() => const SizedBox(),
     };
@@ -792,7 +799,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               } else if (item is FolderItem) {
                 _openFolder(item, d.globalPosition);
               } else if (item is WidgetItem) {
-                final kinds = [item.kind, ...item.stack];
+                final kinds = [for (final face in item.faces) face.kind];
                 final kind = kinds[(stackPage[item.id] ?? 0).clamp(0, kinds.length - 1)];
                 kind == WidgetKind.note ? _editNote() : openWidget(kind, _state);
               }
@@ -1260,9 +1267,10 @@ class WidgetGallery extends StatelessWidget {
                               ),
                             ),
                           ),
-                    if (only == null && onPickApp != null)
+                    if (onPickApp != null)
                       AppWidgetList(
                         state: state,
+                        only: only,
                         onPick: (provider, size) {
                           Navigator.of(context).pop();
                           onPickApp!(provider, size);

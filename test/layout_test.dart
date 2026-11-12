@@ -288,6 +288,22 @@ void placementTests() {
       expect(l.pages, hasLength(1));
     });
 
+    test('ein Stapel behält Widgets anderer Apps und gibt ihre Ids zurück', () {
+      final item = WidgetItem('w', WidgetKind.clock, WidgetSize.small, [
+        StackEntry(WidgetKind.app, hostId: 7, provider: 'p/.W', title: 'Duo'),
+        StackEntry(WidgetKind.battery),
+      ]);
+      final loaded = HomeItem.fromJson(item.toJson()) as WidgetItem;
+      expect([for (final face in loaded.faces) face.kind], [WidgetKind.clock, WidgetKind.app, WidgetKind.battery]);
+      expect([loaded.faces[1].hostId, loaded.faces[1].title], [7, 'Duo']);
+      expect(loaded.hostIds, [7]);
+      final l = HomeLayout();
+      expect(l.removeFromStack(loaded, 0), null);
+      expect([loaded.kind, loaded.hostId, loaded.provider], [WidgetKind.app, 7, 'p/.W']);
+      expect(l.removeFromStack(loaded, 0), 7);
+      expect([loaded.kind, loaded.hostId, loaded.stack], [WidgetKind.battery, null, isEmpty]);
+    });
+
     test('Position und Größe überstehen Speichern, alte Widgets werden erkannt', () {
       final l = page(2)..addWidget(WidgetKind.weather, 0, WidgetSize.large);
       l.pin(0);

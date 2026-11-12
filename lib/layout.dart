@@ -38,7 +38,7 @@ enum WidgetKind {
   /// The first size is the one a new widget gets.
   final List<WidgetSize> sizes;
 
-  /// Drawn by Glas itself, so it can go into stacks and the Today view.
+  /// Drawn by Glas itself; a widget of another app needs Android's widget host.
   bool get builtIn => this != app;
 }
 
@@ -75,7 +75,7 @@ sealed class HomeItem {
       _ => throw const FormatException('widget without kind'),
     };
     final saved = j['size'] as String?;
-    final stack = [for (final name in j['stack'] as List? ?? const []) ?WidgetKind.values.asNameMap()[name]];
+    final stack = [for (final entry in j['stack'] as List? ?? const []) ?StackEntry.fromJson(entry)];
     return WidgetItem(j['id'] as String, kind, saved == null ? size : WidgetSize.values.byName(saved), stack)
       ..hostId = j['hostId'] as int?
       ..provider = j['provider'] as String?
@@ -109,10 +109,10 @@ class FolderItem extends HomeItem {
 }
 
 class WidgetItem extends HomeItem {
-  WidgetItem(this.id, this.kind, [WidgetSize? size, List<WidgetKind>? stack]) : size = size ?? kind.sizes.first, stack = stack ?? [];
+  WidgetItem(this.id, this.kind, [WidgetSize? size, List<StackEntry>? stack]) : size = size ?? kind.sizes.first, stack = stack ?? [];
 
   /// Further widgets of the same size, swiped through in one place: iOS's widget stack.
-  final List<WidgetKind> stack;
+  final List<StackEntry> stack;
 
   @override
   final String id;
@@ -127,6 +127,19 @@ class WidgetItem extends HomeItem {
   String? provider;
   String? title;
 
+  /// Every widget of the stack as an item of its own, the one showing first in front.
+  List<WidgetItem> get faces => [
+    this,
+    for (final (index, entry) in stack.indexed)
+      WidgetItem('$id#$index', entry.kind, size)
+        ..hostId = entry.hostId
+        ..provider = entry.provider
+        ..title = entry.title,
+  ];
+
+  /// What Android's widget host holds for this item, stack included.
+  List<int> get hostIds => [?hostId, for (final entry in stack) ?entry.hostId];
+
   @override
   int get width => size.width;
 
@@ -139,12 +152,37 @@ class WidgetItem extends HomeItem {
     'id': id,
     'kind': kind.name,
     'size': size.name,
-    if (stack.isNotEmpty) 'stack': [for (final k in stack) k.name],
+    if (stack.isNotEmpty) 'stack': [for (final entry in stack) entry.toJson()],
     if (hostId != null) 'hostId': hostId,
     if (provider != null) 'provider': provider,
     if (title != null) 'title': title,
     ..._cell,
   };
+}
+
+/// A further widget in a stack. One of another app carries what Android needs to show it,
+/// as [WidgetItem] does for the widget in front.
+class StackEntry {
+  StackEntry(this.kind, {this.hostId, this.provider, this.title});
+  final WidgetKind kind;
+  final int? hostId;
+  final String? provider;
+  final String? title;
+
+  /// Built-in widgets are saved by name, as before stacks could hold other apps' widgets.
+  Object toJson() => kind.builtIn ? kind.name : {'kind': kind.name, 'hostId': hostId, 'provider': provider, 'title': title};
+
+  static StackEntry? fromJson(Object? j) {
+    if (j is String) {
+      final kind = WidgetKind.values.asNameMap()[j];
+      return kind == null || !kind.builtIn ? null : StackEntry(kind);
+    }
+    if (j is! Map) return null;
+    final kind = WidgetKind.values.asNameMap()[j['kind']];
+    final hostId = j['hostId'] as int?;
+    if (kind != WidgetKind.app || hostId == null) return null;
+    return StackEntry(WidgetKind.app, hostId: hostId, provider: j['provider'] as String?, title: j['title'] as String?);
+  }
 }
 
 /// Free space held open under a dragged item; never saved.
@@ -549,13 +587,18 @@ class HomeLayout {
   }
 
   /// Takes the widget at [index] out of a stack; a stack of one is a plain widget again.
-  void removeFromStack(WidgetItem item, int index) {
-    if (item.stack.isEmpty) return;
-    if (index == 0) {
-      item.kind = item.stack.removeAt(0);
-    } else {
-      item.stack.removeAt(index - 1);
-    }
+  /// Returns the id Android's widget host held for it, to be given back.
+  int? removeFromStack(WidgetItem item, int index) {
+    if (item.stack.isEmpty) return null;
+    if (index > 0) return item.stack.removeAt(index - 1).hostId;
+    final gone = item.hostId;
+    final next = item.stack.removeAt(0);
+    item
+      ..kind = next.kind
+      ..hostId = next.hostId
+      ..provider = next.provider
+      ..title = next.title;
+    return gone;
   }
 
   /// Back on the home screen from the App Library.
