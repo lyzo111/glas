@@ -407,7 +407,9 @@ class HomeLayout {
     for (final list in [...pages, ...hidden, dock]) {
       list.removeWhere((item) => item is AppItem && !apps.contains(item.key));
       for (final folder in list.whereType<FolderItem>()) {
-        folder.apps.removeWhere((key) => !apps.contains(key));
+        // Also what earlier versions let in twice.
+        final once = <String>{};
+        folder.apps.removeWhere((key) => !apps.contains(key) || !once.add(key));
       }
       _dissolveFolders(list);
     }
@@ -543,7 +545,7 @@ class HomeLayout {
     if (identical(source, target) || source is! AppItem) return false;
     if (target is FolderItem) {
       if (target.apps.length >= folderCapacity) return false;
-      target.apps.add(source.key);
+      if (!target.apps.contains(source.key)) target.apps.add(source.key);
     } else if (target is AppItem) {
       _list(to.page)[to.index] = FolderItem(_id('folder'), name, [target.key, source.key])
         ..column = target.column
@@ -623,7 +625,7 @@ class HomeLayout {
 
   /// Back on the home screen from the App Library.
   void addApp(String key) {
-    if (all.any((i) => i is AppItem && i.key == key)) return;
+    if (all.any((i) => (i is AppItem && i.key == key) || (i is FolderItem && i.apps.contains(key)))) return;
     // From a page that is switched off it moves over, so it isn't there twice later.
     for (final page in hidden) {
       page.removeWhere((i) => i is AppItem && i.key == key);

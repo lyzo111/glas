@@ -114,6 +114,17 @@ void main() {
       expect((l.pages[0].single as FolderItem).apps, keys(3));
     });
 
+    test('nimmt jede App nur einmal auf und räumt Doppelte beim Abgleich auf', () {
+      final l = HomeLayout()..sync(keys(4));
+      l.merge(const Place(0, 1), const Place(0, 0));
+      final folder = l.pages[0][0] as FolderItem;
+      l.addApp('a/1');
+      expect(l.pages[0].whereType<AppItem>().map((a) => a.key), ['a/2', 'a/3']);
+      folder.apps.addAll(['a/1', 'a/1']);
+      l.sync(keys(4));
+      expect(folder.apps, ['a/0', 'a/1']);
+    });
+
     test('löst sich auf, wenn nur eine App übrig bleibt', () {
       final l = HomeLayout()..sync(keys(2));
       l.merge(const Place(0, 1), const Place(0, 0));

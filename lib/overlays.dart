@@ -172,71 +172,73 @@ class _FolderViewState extends State<FolderView> {
   Widget build(BuildContext context) {
     final p = Ios.of(context);
     final apps = widget.folder.apps;
+    final pages = [for (var i = 0; i < apps.length; i += 9) apps.sublist(i, min(i + 9, apps.length))];
+    final shown = _page.clamp(0, max(pages.length - 1, 0));
+    // The panel always has room for three rows, as on iOS, however few apps there are.
+    final rowHeight = p.icon + p(24), rowGap = p(20);
     return Backdrop(
       dim: 0.2,
       child: Center(
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: p(32)),
+          padding: EdgeInsets.symmetric(horizontal: p(27)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: _name,
-                textAlign: TextAlign.center,
-                style: sf(p(34), weight: 700),
-                decoration: const InputDecoration(border: InputBorder.none),
-                onChanged: (v) {
-                  if (v.trim().isEmpty) return;
-                  widget.folder.name = v.trim();
-                  widget.state.commit();
-                },
+              Padding(
+                padding: EdgeInsets.only(left: p(22)),
+                child: TextField(
+                  controller: _name,
+                  style: sf(p(34), weight: 700),
+                  decoration: const InputDecoration(border: InputBorder.none, isCollapsed: true),
+                  onChanged: (v) {
+                    if (v.trim().isEmpty) return;
+                    widget.folder.name = v.trim();
+                    widget.state.commit();
+                  },
+                ),
               ),
-              SizedBox(height: p(10)),
+              SizedBox(height: p(14)),
               GestureDetector(
                 onTap: () {},
                 child: Glass(
-                  radius: p(40),
-                  tint: 0.14,
+                  radius: p(38),
+                  tint: 0.2,
                   child: Padding(
-                    padding: EdgeInsets.all(p(20)),
-                    // Nine apps a page as on iOS; more pages are swiped through, with dots below.
-                    child: LayoutBuilder(
-                      builder: (context, box) {
-                        final gap = p(8);
-                        final cellHeight = box.maxWidth / 3 / _aspect;
-                        final pages = [for (var i = 0; i < apps.length; i += 9) apps.sublist(i, min(i + 9, apps.length))];
-                        final shown = _page.clamp(0, max(pages.length - 1, 0));
-                        if (pages.length < 2) return _grid(p, apps);
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              height: cellHeight * 3 + gap * 2,
-                              child: PageView(
-                                controller: _pages,
-                                onPageChanged: (i) => setState(() => _page = i),
-                                children: [for (final page in pages) _grid(p, page)],
-                              ),
-                            ),
-                            SizedBox(height: p(12)),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
+                    padding: EdgeInsets.fromLTRB(p(22), p(26), p(22), p(14)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          height: rowHeight * 3 + rowGap * 2,
+                          child: PageView(
+                            controller: _pages,
+                            onPageChanged: (i) => setState(() => _page = i),
+                            children: [for (final page in pages) _grid(p, page, rowHeight, rowGap)],
+                          ),
+                        ),
+                        SizedBox(height: p(12)),
+                        // The dots keep their room on a single page, so every folder is one size.
+                        SizedBox(
+                          height: p(7),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (pages.length > 1)
                                 for (var i = 0; i < pages.length; i++)
                                   Container(
                                     width: p(7),
                                     height: p(7),
-                                    margin: EdgeInsets.symmetric(horizontal: p(4)),
+                                    margin: EdgeInsets.symmetric(horizontal: p(4.5)),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: Colors.white.withValues(alpha: i == shown ? 1 : 0.4),
                                     ),
                                   ),
-                              ],
-                            ),
-                          ],
-                        );
-                      },
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -248,20 +250,16 @@ class _FolderViewState extends State<FolderView> {
     );
   }
 
-  static const _aspect = 0.84;
-
   /// One page of the folder.
-  Widget _grid(Ios p, List<String> keys) => GridView.count(
-    shrinkWrap: true,
+  Widget _grid(Ios p, List<String> keys, double rowHeight, double rowGap) => GridView(
     padding: EdgeInsets.zero,
-    crossAxisCount: 3,
-    childAspectRatio: _aspect,
-    mainAxisSpacing: p(8),
+    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, mainAxisExtent: rowHeight, mainAxisSpacing: rowGap),
     physics: const NeverScrollableScrollPhysics(),
     children: [
       for (final key in keys)
         Builder(
           builder: (iconContext) => GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () {
               final app = widget.state.apps[key];
               if (app != null) widget.state.launch(app, iconContext);
@@ -271,7 +269,16 @@ class _FolderViewState extends State<FolderView> {
               children: [
                 AppIcon(app: widget.state.apps[key], size: p.icon, badge: widget.state.badges[widget.state.apps[key]?.package] ?? 0),
                 SizedBox(height: p(6)),
-                Text(widget.state.apps[key]?.name ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(p(12), weight: 500)),
+                SizedBox(
+                  width: p.icon + p(20),
+                  child: Text(
+                    widget.state.apps[key]?.name ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: sf(p(12), weight: 500),
+                  ),
+                ),
               ],
             ),
           ),
