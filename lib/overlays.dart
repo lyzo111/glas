@@ -175,21 +175,24 @@ class _FolderViewState extends State<FolderView> {
     final pages = [for (var i = 0; i < apps.length; i += 9) apps.sublist(i, min(i + 9, apps.length))];
     final shown = _page.clamp(0, max(pages.length - 1, 0));
     // The panel always has room for three rows, as on iOS, however few apps there are.
-    final rowHeight = p.icon + p(24), rowGap = p(20);
+    final rowHeight = p.icon + p(24), rowGap = p(10);
+    // Measured on iOS: the panel takes three quarters of the width and sits in the middle of
+    // the screen, the name stands centred well above it.
+    final titleHeight = p(46), titleGap = p(62);
     return Backdrop(
       dim: 0.2,
       child: Center(
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: p(27)),
+          padding: EdgeInsets.symmetric(horizontal: p(52)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: EdgeInsets.only(left: p(22)),
+              SizedBox(
+                height: titleHeight,
                 child: TextField(
                   controller: _name,
-                  style: sf(p(34), weight: 700),
+                  textAlign: TextAlign.center,
+                  style: sf(p(36), weight: 400),
                   decoration: const InputDecoration(border: InputBorder.none, isCollapsed: true),
                   onChanged: (v) {
                     if (v.trim().isEmpty) return;
@@ -198,14 +201,14 @@ class _FolderViewState extends State<FolderView> {
                   },
                 ),
               ),
-              SizedBox(height: p(14)),
+              SizedBox(height: titleGap),
               GestureDetector(
                 onTap: () {},
                 child: Glass(
                   radius: p(38),
                   tint: 0.2,
                   child: Padding(
-                    padding: EdgeInsets.fromLTRB(p(22), p(26), p(22), p(14)),
+                    padding: EdgeInsets.fromLTRB(p(14), p(28), p(14), p(16)),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -243,6 +246,8 @@ class _FolderViewState extends State<FolderView> {
                   ),
                 ),
               ),
+              // As much room below as the name takes above, so the panel is the centre.
+              SizedBox(height: titleHeight + titleGap),
             ],
           ),
         ),
@@ -266,11 +271,14 @@ class _FolderViewState extends State<FolderView> {
             },
             onLongPressStart: (d) => _menu(key, d.globalPosition),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AppIcon(app: widget.state.apps[key], size: p.icon, badge: widget.state.badges[widget.state.apps[key]?.package] ?? 0),
+                Center(
+                  child: AppIcon(app: widget.state.apps[key], size: p.icon, badge: widget.state.badges[widget.state.apps[key]?.package] ?? 0),
+                ),
                 SizedBox(height: p(6)),
-                SizedBox(
-                  width: p.icon + p(20),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: p(2)),
                   child: Text(
                     widget.state.apps[key]?.name ?? '',
                     maxLines: 1,

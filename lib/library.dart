@@ -35,12 +35,18 @@ class _AppLibraryState extends State<AppLibrary> {
     ),
   );
 
-  Widget _icon(AppInfo app, double size) => Builder(
-    builder: (iconContext) => GestureDetector(
-      onTap: () => _state.launch(app, iconContext),
-      onLongPressStart: (d) => _menu(app, d.globalPosition),
-      child: AppIcon(app: app, size: size, badge: _state.badges[app.package] ?? 0),
-    ),
+  /// [around] puts the name beside or below the icon; a tap or hold on it counts like one
+  /// on the icon, instead of falling through to whatever closes the page behind.
+  Widget _icon(AppInfo app, double size, {Widget Function(Widget icon)? around}) => Builder(
+    builder: (iconContext) {
+      final icon = AppIcon(app: app, size: size, badge: _state.badges[app.package] ?? 0);
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _state.launch(app, iconContext),
+        onLongPressStart: (d) => _menu(app, d.globalPosition),
+        child: around == null ? icon : around(icon),
+      );
+    },
   );
 
   void _openCategory(String name, List<AppInfo> apps) => openOverlay<void>(
@@ -62,12 +68,16 @@ class _AppLibraryState extends State<AppLibrary> {
                   childAspectRatio: 0.78,
                   children: [
                     for (final app in apps)
-                      Column(
-                        children: [
-                          _icon(app, 60),
-                          const SizedBox(height: 5),
-                          Text(app.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(12, weight: 500)),
-                        ],
+                      _icon(
+                        app,
+                        60,
+                        around: (icon) => Column(
+                          children: [
+                            icon,
+                            const SizedBox(height: 5),
+                            Text(app.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(12, weight: 500)),
+                          ],
+                        ),
                       ),
                   ],
                 ),
@@ -159,12 +169,16 @@ class _AppLibraryState extends State<AppLibrary> {
                 for (final app in found)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      children: [
-                        _icon(app, 44),
-                        const SizedBox(width: 14),
-                        Expanded(child: Text(app.name, style: sf(16))),
-                      ],
+                    child: _icon(
+                      app,
+                      44,
+                      around: (icon) => Row(
+                        children: [
+                          icon,
+                          const SizedBox(width: 14),
+                          Expanded(child: Text(app.name, style: sf(16))),
+                        ],
+                      ),
                     ),
                   ),
               ],
