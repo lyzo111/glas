@@ -1015,7 +1015,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             itemBuilder: (_, index) {
                               if (index == 0) {
                                 return RepaintBoundary(
-                                  child: TodayView(state: _state, editing: _editing, onSearch: _openSearch, onEdit: () => _setEditing(true)),
+                                  child: TodayView(state: _state, editing: _editing, wiggle: _wiggle, onSearch: _openSearch, onEdit: () => _setEditing(true)),
                                 );
                               }
                               final page = index - 1;

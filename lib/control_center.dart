@@ -499,17 +499,49 @@ class NotificationCenter extends StatelessWidget {
     Future<void>.delayed(const Duration(milliseconds: 300), state.refresh);
   }
 
-  Widget _round(Ios p, IconData icon, {bool on = false, required VoidCallback onTap}) => GestureDetector(
+  Widget _round(Ios p, Widget child, {bool on = false, required VoidCallback onTap}) => GestureDetector(
     onTap: onTap,
     child: Glass(
       radius: p(30),
       tint: on ? 0.92 : 0.12,
       child: SizedBox.square(
         dimension: p(58),
-        child: Icon(icon, color: on ? Colors.black : Colors.white, size: p(26)),
+        child: Center(child: child),
       ),
     ),
   );
+
+  /// The button the lock screen has in this corner: torch, camera or an app; empty for none.
+  Widget _corner(Ios p, String choice, int index) {
+    final id = state.lockShortcut(choice, index);
+    final torch = state.status.torch;
+    final Widget? button = switch (id) {
+      'torch' => _round(
+        p,
+        Icon(torch ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded, color: torch ? Colors.black : Colors.white, size: p(26)),
+        on: torch,
+        onTap: () async {
+          await Native.call('torch', !torch);
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+          await state.refresh();
+        },
+      ),
+      'camera' => _round(
+        p,
+        Icon(CupertinoIcons.camera_fill, color: Colors.white, size: p(26)),
+        onTap: () => Native.call('camera'),
+      ),
+      _ => switch (state.apps[id] ?? state.apps.values.where((a) => a.package == id).firstOrNull) {
+        null => null,
+        final app => _round(
+          p,
+          AppIcon(app: app, size: p(34)),
+          onTap: () => state.launch(app, null),
+        ),
+      },
+    };
+    return SizedBox.square(dimension: p(58), child: button);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -588,19 +620,7 @@ class NotificationCenter extends StatelessWidget {
                 bottom: p(51),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _round(
-                      p,
-                      state.status.torch ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
-                      on: state.status.torch,
-                      onTap: () async {
-                        await Native.call('torch', !state.status.torch);
-                        await Future<void>.delayed(const Duration(milliseconds: 250));
-                        await state.refresh();
-                      },
-                    ),
-                    _round(p, CupertinoIcons.camera_fill, onTap: () => Native.call('camera')),
-                  ],
+                  children: [_corner(p, state.settings.lockLeft, 0), _corner(p, state.settings.lockRight, 1)],
                 ),
               ),
             ],

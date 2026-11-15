@@ -15,11 +15,12 @@ String todayAppEntry(WidgetSize size, int hostId, WidgetProvider provider) => 'a
 /// small ones share a row. It is edited together with the home screen: holding a widget
 /// starts it, the plus of the edit bar adds to it.
 class TodayView extends StatefulWidget {
-  const TodayView({super.key, required this.state, required this.editing, required this.onSearch, required this.onEdit});
+  const TodayView({super.key, required this.state, required this.editing, required this.wiggle, required this.onSearch, required this.onEdit});
   final AppState state;
 
-  /// The home screen's edit mode.
+  /// The home screen's edit mode, and its wiggle from 0 to 1 and back.
   final bool editing;
+  final Animation<double> wiggle;
 
   /// Pulling the view down opens the search, as on the home screen.
   final VoidCallback onSearch;
@@ -73,7 +74,19 @@ class _TodayViewState extends State<TodayView> {
     return rows;
   }
 
-  Widget _widget(Ios p, String entry, WidgetItem item) => Stack(
+  Widget _widget(Ios p, String entry, WidgetItem item) {
+    final face = _face(p, entry, item);
+    if (!widget.editing) return face;
+    // Neighbours lean opposite ways, as the icons of the home screen do.
+    final way = entry.hashCode.isEven ? 1 : -1;
+    return AnimatedBuilder(
+      animation: widget.wiggle,
+      child: face,
+      builder: (_, child) => Transform.rotate(angle: way * (widget.wiggle.value - 0.5) * 0.018, child: child),
+    );
+  }
+
+  Widget _face(Ios p, String entry, WidgetItem item) => Stack(
     clipBehavior: Clip.none,
     children: [
       SizedBox(
