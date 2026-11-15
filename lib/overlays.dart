@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import 'glass.dart';
@@ -110,10 +111,8 @@ class FolderIcon extends StatelessWidget {
     final small = (size - pad * 2 - gap * 2) / 3;
     return SizedBox.square(
       dimension: size,
-      child: Glass(
+      child: FolderPane(
         radius: size * 0.2237,
-        tint: 0.24,
-        blur: false,
         child: Padding(
           padding: EdgeInsets.all(pad),
           child: Wrap(
@@ -156,13 +155,13 @@ class _FolderViewState extends State<FolderView> {
         position: position,
         preview: AppIcon(app: app, size: 64),
         actions: [
-          QuickAction('Aus Ordner entfernen', Icons.drive_file_move_outline, () {
+          QuickAction('Aus Ordner entfernen', CupertinoIcons.folder_badge_minus, () {
             widget.state.layout.removeFromFolder(widget.folder, key);
             widget.state.commit();
             setState(() {});
             if (widget.folder.apps.length < 2) Navigator.of(context).maybePop();
           }),
-          if (app != null) QuickAction('App-Info', Icons.info_outline, () => Native.call('appInfo', app.package)),
+          if (app != null) QuickAction('App-Info', CupertinoIcons.info_circle, () => Native.call('appInfo', app.package)),
         ],
       ),
     );
@@ -175,24 +174,25 @@ class _FolderViewState extends State<FolderView> {
     final pages = [for (var i = 0; i < apps.length; i += 9) apps.sublist(i, min(i + 9, apps.length))];
     final shown = _page.clamp(0, max(pages.length - 1, 0));
     // The panel always has room for three rows, as on iOS, however few apps there are.
-    final rowHeight = p.icon + p(24), rowGap = p(10);
-    // Measured on iOS: the panel takes three quarters of the width and sits in the middle of
-    // the screen, the name stands centred well above it.
-    final titleHeight = p(46), titleGap = p(62);
+    final rowHeight = p.icon + p(24), rowGap = p(14.5);
+    // Measured on iOS 26: the panel takes three quarters of the width and sits in the middle
+    // of the screen, the name stands bold above its left side.
+    final titleHeight = p(44), titleGap = p(30);
     return Backdrop(
       dim: 0.2,
       child: Center(
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: p(52)),
+          padding: EdgeInsets.symmetric(horizontal: p(47.5)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
+              Container(
                 height: titleHeight,
+                padding: EdgeInsets.only(left: p(24)),
+                alignment: Alignment.bottomLeft,
                 child: TextField(
                   controller: _name,
-                  textAlign: TextAlign.center,
-                  style: sf(p(36), weight: 400),
+                  style: sf(p(35), weight: 700),
                   decoration: const InputDecoration(border: InputBorder.none, isCollapsed: true),
                   onChanged: (v) {
                     if (v.trim().isEmpty) return;
@@ -208,7 +208,7 @@ class _FolderViewState extends State<FolderView> {
                   radius: p(38),
                   tint: 0.2,
                   child: Padding(
-                    padding: EdgeInsets.fromLTRB(p(14), p(28), p(14), p(16)),
+                    padding: EdgeInsets.fromLTRB(p(12.5), p(26), p(12.5), p(13)),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -284,7 +284,7 @@ class _FolderViewState extends State<FolderView> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: sf(p(12), weight: 500),
+                    style: sf(p(12.5), weight: 500),
                   ),
                 ),
               ],
@@ -308,6 +308,9 @@ class Spotlight extends StatefulWidget {
 class _SpotlightState extends State<Spotlight> {
   final _text = TextEditingController();
   String _query = '';
+
+  /// Four suggestions, or eight after "Mehr".
+  bool _more = false;
 
   @override
   void dispose() {
@@ -339,9 +342,24 @@ class _SpotlightState extends State<Spotlight> {
     child: Glass(radius: p(26), tint: 0.16, blur: false, child: child),
   );
 
-  Widget _heading(Ios p, String text) => Padding(
-    padding: EdgeInsets.fromLTRB(p(14), 0, p(14), p(8)),
-    child: Text(text, style: sf(p(20), weight: 700)),
+  static const _quiet = Color(0xB3DCE6F5);
+
+  /// [action] is the word on the right that folds the section open or shut.
+  Widget _heading(Ios p, String text, {String? action, VoidCallback? onAction}) => Padding(
+    padding: EdgeInsets.fromLTRB(p(0), 0, p(0), p(9)),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(text, style: sf(p(17), weight: 600, color: _quiet)),
+        ),
+        if (action != null)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onAction,
+            child: Text(action, style: sf(p(17), weight: 600, color: _quiet)),
+          ),
+      ],
+    ),
   );
 
   Widget _symbol(Ios p, IconData icon) => Container(
@@ -375,7 +393,7 @@ class _SpotlightState extends State<Spotlight> {
               ],
             ),
           ),
-          Icon(Icons.chevron_right_rounded, size: p(22), color: Colors.white.withValues(alpha: 0.4)),
+          Icon(CupertinoIcons.chevron_right, size: p(22), color: Colors.white.withValues(alpha: 0.4)),
         ],
       ),
     ),
@@ -402,12 +420,12 @@ class _SpotlightState extends State<Spotlight> {
   Widget _grid(Ios p, List<AppInfo> apps) => _card(
     p,
     Padding(
-      padding: EdgeInsets.fromLTRB(p(6), p(16), p(6), p(4)),
+      padding: EdgeInsets.fromLTRB(p(3.5), p(16), p(3.5), p(2)),
       child: Column(
         children: [
           for (var start = 0; start < apps.length; start += 4)
             Padding(
-              padding: EdgeInsets.only(bottom: p(12)),
+              padding: EdgeInsets.only(bottom: p(10)),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -421,14 +439,14 @@ class _SpotlightState extends State<Spotlight> {
                                 onTap: () => _open(apps[start + column], iconContext),
                                 child: Column(
                                   children: [
-                                    AppIcon(app: apps[start + column], size: p(58)),
+                                    AppIcon(app: apps[start + column], size: p.icon),
                                     SizedBox(height: p(6)),
                                     Text(
                                       apps[start + column].name,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       textAlign: TextAlign.center,
-                                      style: sf(p(12), weight: 500),
+                                      style: sf(p(12.5), weight: 500),
                                     ),
                                   ],
                                 ),
@@ -462,21 +480,21 @@ class _SpotlightState extends State<Spotlight> {
       radius: p(24),
       tint: 0.18,
       child: SizedBox(
-        height: p(48),
+        height: p(47.5),
         child: Row(
           children: [
             SizedBox(width: p(14)),
-            Icon(Icons.search_rounded, color: Colors.white.withValues(alpha: 0.8), size: p(21)),
-            SizedBox(width: p(8)),
+            Icon(CupertinoIcons.search, color: Colors.white, size: p(21)),
+            SizedBox(width: p(7)),
             Expanded(
               child: TextField(
                 controller: _text,
                 autofocus: true,
-                style: sf(p(17)),
-                cursorColor: const Color(0xFF0A84FF),
+                style: sf(p(19)),
+                cursorColor: Colors.white,
                 decoration: InputDecoration(
                   hintText: 'Suchen',
-                  hintStyle: sf(p(17), color: Colors.white.withValues(alpha: 0.7)),
+                  hintStyle: sf(p(19), color: Colors.white.withValues(alpha: 0.45)),
                   border: InputBorder.none,
                   isCollapsed: true,
                 ),
@@ -498,7 +516,7 @@ class _SpotlightState extends State<Spotlight> {
                 },
                 child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: p(13)),
-                  child: Icon(Icons.cancel_rounded, size: p(19), color: Colors.white.withValues(alpha: 0.6)),
+                  child: Icon(CupertinoIcons.xmark_circle_fill, size: p(19), color: Colors.white.withValues(alpha: 0.6)),
                 ),
               ),
           ],
@@ -511,20 +529,23 @@ class _SpotlightState extends State<Spotlight> {
       tapToClose: false,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          p(16),
-          islandCenter(context) * 2 + p(12),
-          p(16),
-          max(MediaQuery.viewInsetsOf(context).bottom, MediaQuery.viewPaddingOf(context).bottom) + p(10),
+          p(8.5),
+          islandCenter(context) * 2 + p(14),
+          p(8.5),
+          max(MediaQuery.viewInsetsOf(context).bottom, MediaQuery.viewPaddingOf(context).bottom) + p(9),
         ),
         child: Column(
           children: [
             Expanded(
               child: ListView(
-                padding: EdgeInsets.zero,
+                padding: EdgeInsets.symmetric(horizontal: p(8.5)),
                 physics: const BouncingScrollPhysics(),
                 keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 children: [
-                  if (suggestions.isNotEmpty) ...[_heading(p, 'Vorschläge'), _grid(p, suggestions)],
+                  if (suggestions.isNotEmpty) ...[
+                    _heading(p, 'Vorschläge', action: _more ? 'Weniger' : 'Mehr', onAction: () => setState(() => _more = !_more)),
+                    _grid(p, suggestions.take(_more ? 8 : 4).toList()),
+                  ],
                   if (result != null)
                     _card(
                       p,
@@ -562,7 +583,7 @@ class _SpotlightState extends State<Spotlight> {
                       if (showSettings)
                         _row(
                           p,
-                          leading: _symbol(p, Icons.tune_rounded),
+                          leading: _symbol(p, CupertinoIcons.slider_horizontal_3),
                           title: 'Glas anpassen',
                           detail: 'Einstellungen',
                           onTap: () => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => SetupScreen(state: state))),
@@ -571,7 +592,7 @@ class _SpotlightState extends State<Spotlight> {
                   ],
                   if (q.isNotEmpty) ...[
                     _heading(p, 'Im Web suchen'),
-                    _list(p, [_row(p, leading: _symbol(p, Icons.search_rounded), title: _query.trim(), detail: 'Websuche', onTap: _web)]),
+                    _list(p, [_row(p, leading: _symbol(p, CupertinoIcons.search), title: _query.trim(), detail: 'Websuche', onTap: _web)]),
                   ],
                 ],
               ),

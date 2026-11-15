@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import 'appwidgets.dart';
@@ -9,42 +10,29 @@ import 'widgets.dart';
 /// How a widget of another app is kept in the Today view: "app:size:host id:provider:app name".
 String todayAppEntry(WidgetSize size, int hostId, WidgetProvider provider) => 'app:${size.name}:$hostId:${provider.id}:${provider.app}';
 
-/// The iOS Today view left of the first page: the widgets the user picks, laid out on the
-/// grid of the home screen, so two small ones share a row.
+/// The iOS Today view: the page left of the first one, reached by the same swipe as any
+/// other page. It holds the widgets the user picks, on the grid of the home screen, so two
+/// small ones share a row. It is edited together with the home screen: holding a widget
+/// starts it, the plus of the edit bar adds to it.
 class TodayView extends StatefulWidget {
-  const TodayView({super.key, required this.state, required this.onSearch, required this.onAdd});
+  const TodayView({super.key, required this.state, required this.editing, required this.onSearch, required this.onEdit});
   final AppState state;
+
+  /// The home screen's edit mode.
+  final bool editing;
 
   /// Pulling the view down opens the search, as on the home screen.
   final VoidCallback onSearch;
-
-  /// Opens the widget gallery; the picked widget arrives through the settings.
-  final Future<void> Function() onAdd;
+  final VoidCallback onEdit;
 
   @override
   State<TodayView> createState() => _TodayViewState();
 }
 
 class _TodayViewState extends State<TodayView> {
-  bool _editing = false;
   bool _searching = false;
 
   List<String> get _today => widget.state.settings.today;
-
-  // A widget of another app arrives only after Android's consent, once the gallery is gone.
-  void _changed() => setState(() {});
-
-  @override
-  void initState() {
-    super.initState();
-    widget.state.addListener(_changed);
-  }
-
-  @override
-  void dispose() {
-    widget.state.removeListener(_changed);
-    super.dispose();
-  }
 
   /// Entries whose kind or size no longer exists are skipped.
   WidgetItem? _parse(String entry) {
@@ -93,20 +81,21 @@ class _TodayViewState extends State<TodayView> {
         height: p.icon + (item.height - 1) * p.rowPitch,
         // Android draws a widget of another app and takes its taps itself.
         child: item.kind == WidgetKind.app
-            ? AppWidgetView(item: item, live: true, locked: _editing)
+            ? AppWidgetView(item: item, live: true, locked: widget.editing)
             : IgnorePointer(
-                ignoring: _editing,
+                ignoring: widget.editing,
                 child: GestureDetector(
                   onTap: () => openWidget(item.kind, widget.state),
                   child: HomeWidget(kind: item.kind, size: item.size, state: widget.state, scale: p.unit),
                 ),
               ),
       ),
-      if (_editing)
+      if (widget.editing)
         Positioned(
           left: -p(8),
           top: -p(8),
           child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () => _remove(entry, item),
             child: Container(
               width: p(24),
@@ -116,7 +105,7 @@ class _TodayViewState extends State<TodayView> {
                 shape: BoxShape.circle,
                 boxShadow: [BoxShadow(blurRadius: 3, color: Color(0x33000000))],
               ),
-              child: Icon(Icons.remove_rounded, size: p(17), color: const Color(0xFF2C2C2E)),
+              child: Icon(CupertinoIcons.minus, size: p(15), color: const Color(0xFF2C2C2E)),
             ),
           ),
         ),
@@ -127,95 +116,59 @@ class _TodayViewState extends State<TodayView> {
   Widget build(BuildContext context) {
     final p = Ios.of(context);
     final rows = _rows();
-    return Backdrop(
-      dim: 0.28,
-      // Taps between widgets stay here; a swipe to the left or up closes the view.
-      tapToClose: false,
-      onDismiss: () => Navigator.of(context).pop(),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragEnd: (d) {
-          if ((d.primaryVelocity ?? 0) < -250) Navigator.of(context).pop();
-        },
-        child: SafeArea(
-          child: NotificationListener<ScrollUpdateNotification>(
-            onNotification: (n) {
-              if (n.dragDetails != null && n.metrics.pixels < -p(80) && !_searching && !_editing) {
-                _searching = true;
-                widget.onSearch();
-                Future.delayed(const Duration(milliseconds: 600), () => _searching = false);
-              }
-              return false;
-            },
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(0, p(22), 0, p(40)),
-              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-              children: [
-                for (final row in rows)
-                  Padding(
-                    padding: EdgeInsets.only(bottom: p.rowPitch - p.icon),
-                    child: Center(
-                      child: SizedBox(
-                        width: p.fullWidth,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [for (final (entry, item) in row) _widget(p, entry, item)],
-                        ),
-                      ),
-                    ),
-                  ),
-                if (rows.isEmpty)
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: p(60)),
-                    child: Text(
-                      'Noch keine Widgets',
-                      textAlign: TextAlign.center,
-                      style: sf(p(17), color: Colors.white70),
-                    ),
-                  ),
-                Center(
-                  child: Wrap(
-                    spacing: p(10),
-                    children: [
-                      if (_editing)
-                        _Button(
-                          p: p,
-                          label: 'Widget hinzufügen',
-                          onTap: () async {
-                            await widget.onAdd();
-                            if (mounted) setState(() {});
-                          },
-                        ),
-                      _Button(p: p, label: _editing ? 'Fertig' : 'Bearbeiten', onTap: () => setState(() => _editing = !_editing)),
-                    ],
+    return NotificationListener<ScrollUpdateNotification>(
+      onNotification: (n) {
+        if (n.dragDetails != null && n.metrics.pixels < -p(80) && !_searching && !widget.editing) {
+          _searching = true;
+          widget.onSearch();
+          Future.delayed(const Duration(milliseconds: 600), () => _searching = false);
+        }
+        return false;
+      },
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(0, p.gridTop, 0, MediaQuery.viewPaddingOf(context).bottom + p(40)),
+        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+        children: [
+          for (final row in rows)
+            Padding(
+              padding: EdgeInsets.only(bottom: p.rowPitch - p.icon),
+              child: Center(
+                child: SizedBox(
+                  width: p.fullWidth,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [for (final (entry, item) in row) _widget(p, entry, item)],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
+          if (rows.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: p(60)),
+              child: Text(
+                widget.editing ? 'Tippe oben links auf den Pinsel,\num Widgets hinzuzufügen' : 'Noch keine Widgets',
+                textAlign: TextAlign.center,
+                style: sf(p(17), color: Colors.white70, height: 1.3),
+              ),
+            ),
+          if (!widget.editing)
+            Center(
+              child: GestureDetector(
+                onTap: widget.onEdit,
+                child: Glass(
+                  radius: p(18),
+                  tint: 0.16,
+                  blur: false,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: p(18), vertical: p(9)),
+                    child: Text('Bearbeiten', style: sf(p(15), weight: 600)),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
-}
-
-class _Button extends StatelessWidget {
-  const _Button({required this.p, required this.label, required this.onTap});
-  final Ios p;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Glass(
-      radius: p(18),
-      tint: 0.16,
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: p(18), vertical: p(9)),
-        child: Text(label, style: sf(p(15), weight: 600)),
-      ),
-    ),
-  );
 }

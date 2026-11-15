@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -463,7 +464,7 @@ class LockFace extends StatelessWidget {
       case 'week':
         content = [Text('KW', style: small), SizedBox(height: p(2)), Text('${calendarWeek(now)}', style: style)];
       case 'alerts':
-        content = [Icon(Icons.notifications_rounded, size: p(14), color: color), SizedBox(height: p(1)), Text('${state.alerts.length}', style: style)];
+        content = [Icon(CupertinoIcons.bell_fill, size: p(14), color: color), SizedBox(height: p(1)), Text('${state.alerts.length}', style: style)];
       default:
         gauge = now.difference(DateTime(now.year)).inDays / 365;
         content = [Text('${now.year}', style: small), SizedBox(height: p(2)), Text('${(gauge * 100).round()}', style: style)];
@@ -565,7 +566,7 @@ class LockFace extends StatelessWidget {
     return Column(
       children: [
         SizedBox(height: interactive ? islandCenter(context) * 2 + p(14) : p(30)),
-        Icon(Icons.lock_rounded, size: p(17), color: color),
+        Icon(CupertinoIcons.lock_fill, size: p(17), color: color),
         SizedBox(height: p(10)),
         _dateLine(p, s, color),
         LockClock(text: clockText(now), settings: s, p: p),
@@ -774,7 +775,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
         p: p,
         onPress: () => _onButton = true,
         onTrigger: () => Native.call('camera'),
-        child: Icon(Icons.photo_camera_rounded, color: Colors.white, size: p(22)),
+        child: Icon(CupertinoIcons.camera_fill, color: Colors.white, size: p(22)),
       ),
       _ => _appButton(p, id),
     };

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import 'glass.dart';
@@ -81,12 +82,12 @@ class _LiveIslandState extends State<LiveIsland> {
     } else if (now.ringer != was.ringer && DateTime.now().difference(_focusAt) > const Duration(seconds: 3)) {
       // Android flips the ringer along with Do Not Disturb; only a change of its own shows.
       _show(switch (now.ringer) {
-        0 => const _Flash(Icons.notifications_off_rounded, Color(0xFFFF453A), 'Lautlos'),
+        0 => const _Flash(CupertinoIcons.bell_slash_fill, Color(0xFFFF453A), 'Lautlos'),
         1 => const _Flash(Icons.vibration_rounded, Color(0xFFFF9F0A), 'Vibrieren'),
-        _ => const _Flash(Icons.notifications_rounded, Colors.white, 'Klingeln'),
+        _ => const _Flash(CupertinoIcons.bell_fill, Colors.white, 'Klingeln'),
       });
     } else if (now.headphones != null && now.headphones != was.headphones) {
-      _show(_Flash(Icons.headphones_rounded, Colors.white, now.headphones!));
+      _show(_Flash(CupertinoIcons.headphones, Colors.white, now.headphones!));
     } else if (!now.charging && now.battery < 20 && was.battery >= 20) {
       _show(_Flash(Icons.battery_alert_rounded, const Color(0xFFFF453A), '${now.battery} %'));
     }
@@ -158,14 +159,14 @@ class _LiveIslandState extends State<LiveIsland> {
               width: p(24),
               height: p(24),
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              child: Icon(Icons.call_rounded, color: Colors.white, size: p(15)),
+              child: Icon(CupertinoIcons.phone_fill, color: Colors.white, size: p(15)),
             )
           else if (app != null)
             ClipOval(
               child: AppIcon(app: app, size: p(24)),
             )
           else
-            Icon(Icons.timer_rounded, color: color, size: p(20)),
+            Icon(CupertinoIcons.timer, color: color, size: p(20)),
           const Spacer(),
           Text(
             _duration(elapsed),
@@ -336,9 +337,9 @@ class _IslandPlayer extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          control(Icons.fast_rewind_rounded, 'previous', 34),
-                          control(media.playing ? Icons.pause_rounded : Icons.play_arrow_rounded, 'toggle', 42),
-                          control(Icons.fast_forward_rounded, 'next', 34),
+                          control(CupertinoIcons.backward_fill, 'previous', 34),
+                          control(media.playing ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill, 'toggle', 42),
+                          control(CupertinoIcons.forward_fill, 'next', 34),
                         ],
                       ),
                     ],

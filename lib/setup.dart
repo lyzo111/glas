@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import 'glass.dart';
@@ -47,7 +48,9 @@ class _SetupScreenState extends State<SetupScreen> with WidgetsBindingObserver {
       contentPadding: EdgeInsets.zero,
       title: Text(title),
       subtitle: Text(subtitle),
-      trailing: granted ? const Icon(Icons.check_circle, color: Color(0xFF30D158)) : TextButton(onPressed: onTap, child: const Text('Erlauben')),
+      trailing: granted
+          ? const Icon(CupertinoIcons.checkmark_circle_fill, color: Color(0xFF30D158))
+          : TextButton(onPressed: onTap, child: const Text('Erlauben')),
     );
   }
 
@@ -185,7 +188,7 @@ class _SetupScreenState extends State<SetupScreen> with WidgetsBindingObserver {
                 _option('StandBy', 'Beim Laden quer gelegt: große Uhr und Widgets, nachts rot', _settings.standBy, (v) => _settings.standBy = v),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.brush_outlined),
+                  leading: const Icon(CupertinoIcons.paintbrush),
                   title: const Text('Sperrbildschirm gestalten'),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LockEditor(state: _state))),
                 ),
@@ -257,7 +260,7 @@ class _LookGallery extends StatelessWidget {
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(color: Colors.white24),
                       ),
-                      child: const Center(child: Icon(Icons.add_rounded, size: 36)),
+                      child: const Center(child: Icon(CupertinoIcons.plus, size: 36)),
                     ),
                   ),
                 ),
@@ -699,7 +702,7 @@ class ReadySheet extends StatelessWidget {
           SizedBox(width: p(12)),
           Expanded(child: Text(title, style: sf(p(16)))),
           done
-              ? Icon(Icons.check_rounded, color: const Color(0xFF34C759), size: p(22))
+              ? Icon(CupertinoIcons.checkmark_alt, color: const Color(0xFF34C759), size: p(22))
               : GestureDetector(
                   onTap: () => Native.call(key == 'home' ? 'requestHome' : 'openPermission', key == 'home' ? null : key),
                   child: Text('Erlauben', style: sf(p(16), weight: 600, color: const Color(0xFF0A84FF))),
@@ -736,8 +739,8 @@ class ReadySheet extends StatelessWidget {
                       Text('Diese Schalter darf nur du selbst umlegen.', style: sf(p(14), color: Colors.white.withValues(alpha: 0.7))),
                       SizedBox(height: p(10)),
                       _row(p, 'Als Startbildschirm', 'home', Icons.home_rounded, const Color(0xFF0A84FF)),
-                      _row(p, 'Mitteilungen', 'notifications', Icons.notifications_rounded, const Color(0xFFFF3B30)),
-                      _row(p, 'Sperrbildschirm', 'overlay', Icons.lock_rounded, const Color(0xFF5E5CE6)),
+                      _row(p, 'Mitteilungen', 'notifications', CupertinoIcons.bell_fill, const Color(0xFFFF3B30)),
+                      _row(p, 'Sperrbildschirm', 'overlay', CupertinoIcons.lock_fill, const Color(0xFF5E5CE6)),
                       _row(p, 'Wetter am Standort', 'location', Icons.near_me_rounded, const Color(0xFF34C759)),
                       _row(p, 'Termine', 'calendar', Icons.calendar_month_rounded, const Color(0xFFFF9500)),
                       SizedBox(height: p(6)),

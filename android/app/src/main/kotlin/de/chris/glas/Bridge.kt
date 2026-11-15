@@ -355,6 +355,7 @@ class Bridge(
                 "activity" to it.componentName.className,
                 "label" to it.label.toString(),
                 "category" to category(it.applicationInfo),
+                "installed" to it.firstInstallTime,
             )
         }
     }

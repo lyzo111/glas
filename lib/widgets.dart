@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import 'appwidgets.dart';
@@ -166,7 +167,7 @@ class WeatherGlyph extends StatelessWidget {
     final clear = code <= 1;
     final partly = code == 2;
     final sky = Icon(
-      day ? Icons.wb_sunny_rounded : Icons.nightlight_round,
+      day ? Icons.wb_sunny_rounded : CupertinoIcons.moon_fill,
       size: clear ? size : size * 0.72,
       color: day ? const Color(0xFFFFD60A) : Colors.white,
     );
@@ -715,7 +716,7 @@ class _MusicSmall extends StatelessWidget {
                     ),
                     GestureDetector(
                       onTap: () => Native.call('mediaAction', 'toggle'),
-                      child: Icon(media?.playing == true ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: p(34)),
+                      child: Icon(media?.playing == true ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill, color: Colors.white, size: p(34)),
                     ),
                   ],
                 ),
@@ -788,7 +789,7 @@ class _Music extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(media?.playing == true ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: p(20)),
+                            Icon(media?.playing == true ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill, color: Colors.white, size: p(20)),
                             SizedBox(width: p(4)),
                             Text(media?.playing == true ? 'Pause' : 'Abspielen', style: sf(p(14), weight: 600)),
                           ],
@@ -1138,7 +1139,7 @@ class _Photo extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.photo_library_outlined, color: Colors.white, size: p(32)),
+            Icon(CupertinoIcons.photo_on_rectangle, color: Colors.white, size: p(32)),
             SizedBox(height: p(8)),
             Text(state.permissions['photos'] == true ? 'Keine Fotos' : 'Fotos erlauben', style: sf(p(13), weight: 600)),
           ],

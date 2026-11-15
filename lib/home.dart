@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+
 import 'package:flutter/services.dart';
 
 import 'appwidgets.dart';
 import 'control_center.dart';
+import 'gallery.dart';
 import 'glass.dart';
 import 'layout.dart';
 import 'library.dart';
@@ -63,7 +65,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  final _pages = PageController();
+  final _pages = PageController(initialPage: 1);
   final _gridKeys = <int, GlobalKey>{};
   final _dockKey = GlobalKey();
 
@@ -83,8 +85,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   /// A finger on an icon in edit mode, so the pages hold still and the icon is what moves.
 
-  /// Pulling the first page to the right opens the Today view, once per pull.
-  bool _todayOpen = false;
+  /// The home page showing, and whether it is the Today view left of them.
+  int get _page => (_pages.hasClients ? (_pages.page?.round() ?? 1) : 1) - 1;
+  bool get _onToday => _page < 0;
 
   /// Icons are a little bigger in iOS's large style, and lose their names.
   double get _iconSize => Ios.of(context).icon * (_state.settings.largeIcons ? 1.18 : 1);
@@ -104,7 +107,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _firstRun());
     _pages.addListener(() {
-      final page = _pages.page ?? 0;
+      // Counted from the first home page, so the Today view left of it is -1.
+      final page = (_pages.page ?? 1) - 1;
       _position.value = page;
       // The wiggle repaints every icon each frame; while a page slides it would stutter.
       if (_editing) {
@@ -127,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (event != 'home' || !mounted) return;
       Navigator.of(context).popUntil((r) => r.isFirst);
       _setEditing(false);
-      if (_pages.hasClients) _pages.animateToPage(0, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+      if (_pages.hasClients) _pages.animateToPage(1, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
     });
   }
 
@@ -184,7 +188,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _updateHover(_Drag drag) {
-    final page = _pages.page?.round() ?? 0;
+    final page = _page;
+    if (page < 0) return;
     final grid = _rectOf(_gridKey(page));
     final dock = _rectOf(_dockKey);
     final p = drag.position;
@@ -268,7 +273,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _flip = null;
         _flipped = true;
         final target = (page + edge).clamp(0, _layout.pages.length);
-        _pages.animateToPage(target, duration: const Duration(milliseconds: 280), curve: Curves.easeOut).whenComplete(() {
+        _pages.animateToPage(target + 1, duration: const Duration(milliseconds: 280), curve: Curves.easeOut).whenComplete(() {
           // A finger resting at the edge sends no more moves, so the next turn is checked here.
           if (identical(_drag, drag) && mounted) setState(() => _updateHover(drag));
         });
@@ -367,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               QuickAction(
                 size.label,
                 size == item.size
-                    ? Icons.check_rounded
+                    ? CupertinoIcons.checkmark_alt
                     : size == WidgetSize.small
                     ? Icons.crop_square_rounded
                     : size == WidgetSize.medium
@@ -378,7 +383,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   _state.commit();
                 },
               ),
-          if (item is WidgetItem) QuickAction('Zu Stapel hinzufügen', Icons.layers_outlined, () => _addToStack(item)),
+          if (item is WidgetItem) QuickAction('Zu Stapel hinzufügen', CupertinoIcons.layers, () => _addToStack(item)),
           if (item is WidgetItem && item.stack.isNotEmpty)
             QuickAction('Dieses Widget aus Stapel entfernen', Icons.layers_clear_outlined, () {
               final hostId = _layout.removeFromStack(item, (stackPage[item.id] ?? 0).clamp(0, item.stack.length));
@@ -387,18 +392,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               _state.commit();
             }),
           QuickAction('Home-Bildschirm bearbeiten', Icons.apps, () => _setEditing(true)),
-          if (item is FolderItem) QuickAction('Umbenennen', Icons.edit_outlined, () => _rename(item)),
-          if (app != null) QuickAction('App-Info', Icons.info_outline, () => Native.call('appInfo', app.package)),
+          if (item is FolderItem) QuickAction('Umbenennen', CupertinoIcons.pencil, () => _rename(item)),
+          if (app != null) QuickAction('App-Info', CupertinoIcons.info_circle, () => Native.call('appInfo', app.package)),
           QuickAction(
             item is WidgetItem
                 ? (item.stack.isEmpty ? 'Widget entfernen' : 'Stapel entfernen')
                 : item is FolderItem
                 ? 'Ordner entfernen'
                 : 'Vom Home-Bildschirm entfernen',
-            Icons.remove_circle_outline,
+            CupertinoIcons.minus_circle,
             () => _remove(item),
           ),
-          if (app != null) QuickAction('App löschen', Icons.delete_outline, () => Native.call('uninstall', app.package), destructive: true),
+          if (app != null) QuickAction('App löschen', CupertinoIcons.trash, () => Native.call('uninstall', app.package), destructive: true),
         ],
       ),
     );
@@ -500,36 +505,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _openSearch() => openOverlay<void>(context, (_) => Spotlight(state: _state));
 
-  Future<void> _openToday() async {
-    _todayOpen = true;
-    HapticFeedback.selectionClick();
-    await openOverlay<void>(
-      context,
-      (_) => TodayView(
-        state: _state,
-        onSearch: _openSearch,
-        onAdd: () => openOverlay<void>(
-          context,
-          (_) => WidgetGallery(
-            state: _state,
-            onPick: (kind, size) {
-              _state.settings.today.add('${kind.name}:${size.name}');
-              _state.commit();
-            },
-            onPickApp: (provider, size) async {
-              final id = await AppWidgets.bind(provider.id);
-              if (id == null) return;
-              _state.settings.today.add(todayAppEntry(size, id, provider));
-              _state.commit();
-            },
-          ),
-        ),
-      ),
-      origin: Offset(0, MediaQuery.sizeOf(context).height / 2),
-    );
-    _todayOpen = false;
-  }
-
   /// The iOS page overview: every page small, with a tick to keep it on the home screen.
   void _openPages() => openOverlay<void>(
     context,
@@ -569,7 +544,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 GestureDetector(
                   onTap: onToggle,
                   child: Icon(
-                    shown ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                    shown ? CupertinoIcons.checkmark_circle_fill : Icons.radio_button_unchecked_rounded,
                     color: shown ? const Color(0xFF0A84FF) : Colors.white,
                     size: p(28),
                   ),
@@ -578,7 +553,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   SizedBox(width: p(14)),
                   GestureDetector(
                     onTap: onDelete,
-                    child: Icon(Icons.delete_outline_rounded, color: const Color(0xFFFF453A), size: p(26)),
+                    child: Icon(CupertinoIcons.trash, color: const Color(0xFFFF453A), size: p(26)),
                   ),
                 ],
               ],
@@ -664,28 +639,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return (left, width);
   }
 
-  void _addWidget() => openOverlay<void>(
-    context,
-    (_) => WidgetGallery(
-      state: _state,
-      onPick: (kind, size) {
-        final page = (_pages.page?.round() ?? 0).clamp(0, _layout.pages.length - 1);
-        _layout.addWidget(kind, page, size);
-        _state.commit();
-      },
-      onPickApp: (provider, size) async {
-        // Android asks for consent the first time, and some widgets have a setup screen.
-        final id = await AppWidgets.bind(provider.id);
-        if (id == null || !mounted) return;
-        final page = (_pages.page?.round() ?? 0).clamp(0, _layout.pages.length - 1);
-        _layout.addWidget(WidgetKind.app, page, size)
-          ..hostId = id
-          ..provider = provider.id
-          ..title = provider.app;
-        _state.commit();
-      },
-    ),
-  );
+  /// A new widget goes to the page showing; on the Today view, to its list.
+  void _addWidget() {
+    final today = _onToday;
+    final page = _page.clamp(0, _layout.pages.length - 1);
+    openOverlay<void>(
+      context,
+      (_) => WidgetGallery(
+        state: _state,
+        onPick: (kind, size) {
+          if (today) {
+            _state.settings.today.add('${kind.name}:${size.name}');
+          } else {
+            _layout.addWidget(kind, page, size);
+          }
+          _state.commit();
+        },
+        onPickApp: (provider, size) async {
+          // Android asks for consent the first time, and some widgets have a setup screen.
+          final id = await AppWidgets.bind(provider.id);
+          if (id == null || !mounted) return;
+          if (today) {
+            _state.settings.today.add(todayAppEntry(size, id, provider));
+          } else {
+            _layout.addWidget(WidgetKind.app, page, size)
+              ..hostId = id
+              ..provider = provider.id
+              ..title = provider.app;
+          }
+          _state.commit();
+        },
+      ),
+    );
+  }
 
   void _editMenu() => openOverlay<void>(
     context,
@@ -693,17 +679,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       position: Offset(Ios.of(context)(50), islandCenter(context) - Ios.of(context)(30)),
       preview: const SizedBox(),
       actions: [
-        QuickAction('Widget hinzufügen', Icons.add_box_outlined, _addWidget),
-        QuickAction('Anpassen', Icons.brush_outlined, () => openOverlay<void>(context, (_) => CustomizeSheet(state: _state))),
+        QuickAction('Widget hinzufügen', CupertinoIcons.plus_app, _addWidget),
+        QuickAction('Anpassen', CupertinoIcons.paintbrush, () => openOverlay<void>(context, (_) => CustomizeSheet(state: _state))),
         QuickAction(
           'Hintergrund bearbeiten',
-          Icons.photo_outlined,
+          CupertinoIcons.photo,
           () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SetupScreen(state: _state, wallpaperOnly: true))),
         ),
-        QuickAction('Seiten bearbeiten', Icons.view_carousel_outlined, _openPages),
+        QuickAction('Seiten bearbeiten', CupertinoIcons.square_stack, _openPages),
         QuickAction(
           'Glas-Einstellungen',
-          Icons.settings_outlined,
+          CupertinoIcons.gear_alt,
           () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SetupScreen(state: _state))),
         ),
       ],
@@ -780,7 +766,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   shape: BoxShape.circle,
                   boxShadow: [BoxShadow(blurRadius: 3, color: Color(0x33000000))],
                 ),
-                child: Icon(Icons.remove_rounded, size: p(17), color: const Color(0xFF2C2C2E)),
+                child: Icon(CupertinoIcons.minus, size: p(17), color: const Color(0xFF2C2C2E)),
               ),
             ),
           ),
@@ -887,13 +873,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         tint: 0.14,
         blur: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(p(11), p(6), p(13), p(6)),
+          padding: EdgeInsets.fromLTRB(p(12), p(6.5), p(14), p(6.5)),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.search_rounded, size: p(15), color: Colors.white),
+              Icon(CupertinoIcons.search, size: p(15), color: Colors.white),
               SizedBox(width: p(3)),
-              Text('Suchen', style: sf(p(13), weight: 500, height: 1.2)),
+              Text('Suchen', style: sf(p(13.5), weight: 500, height: 1.2)),
             ],
           ),
         ),
@@ -908,24 +894,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return FrostedPanel(
       radius: p(40),
       tint: 0.12,
-      offset: Offset(p(12), screen.height - p(12 + 92)),
+      offset: Offset(p(12), screen.height - p(12) - p.dockHeight),
       wallpaper: _state.settings.wallpaper,
       wallpaperPath: _state.settings.wallpaperPath,
       child: SizedBox(
         key: _dockKey,
-        height: p(92),
+        height: p.dockHeight,
         width: double.infinity,
         child: Row(
           mainAxisAlignment: items.length >= dockSize ? MainAxisAlignment.spaceBetween : MainAxisAlignment.center,
           children: [
-            SizedBox(width: p(27 - 12 - 16.5)),
+            SizedBox(width: max(0, p.margin - p(12) - (p.columnPitch - p.icon) / 2)),
             for (final item in items)
               SizedBox(
                 width: p.columnPitch,
                 height: _iconSize,
                 child: Center(child: _item(item, Place(Place.dock, _layout.dock.indexOf(item)), p.columnPitch)),
               ),
-            SizedBox(width: p(27 - 12 - 16.5)),
+            SizedBox(width: max(0, p.margin - p(12) - (p.columnPitch - p.icon) / 2)),
           ],
         ),
       ),
@@ -939,9 +925,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Pill(icon: Icons.brush_rounded, onTap: _editMenu),
+          _Pill(icon: CupertinoIcons.paintbrush_fill, onTap: _editMenu),
           const Spacer(),
-          _Pill(icon: Icons.check_rounded, onTap: () => _setEditing(false)),
+          _Pill(icon: CupertinoIcons.checkmark_alt, onTap: () => _setEditing(false)),
         ],
       ),
     );
@@ -991,7 +977,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     valueListenable: _position,
                     builder: (_, position, child) {
                       // In edit mode the last page is an empty one for new things, not the library.
-                      final amount = _editing ? 0.0 : (position - lastPage).clamp(0.0, 1.0);
+                      final amount = max(_editing ? 0.0 : position - lastPage, -position).clamp(0.0, 1.0);
                       return amount == 0 ? const SizedBox() : Opacity(opacity: amount, child: child);
                     },
                     child: Stack(
@@ -1018,18 +1004,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       fit: StackFit.expand,
                       children: [
                         NotificationListener<ScrollUpdateNotification>(
-                          onNotification: (n) {
-                            if (n.dragDetails != null && n.metrics.pixels < -p(70) && !_todayOpen && !_editing) _openToday();
-                            return false;
-                          },
+                          onNotification: (n) => false,
                           child: PageView.builder(
                             controller: _pages,
                             // Builds the neighbouring pages ahead, so the App Library is ready
                             // before the swipe reaches it.
                             allowImplicitScrolling: true,
                             physics: _drag != null ? const NeverScrollableScrollPhysics() : const _PagePhysics(),
-                            itemCount: _layout.pages.length + 1,
-                            itemBuilder: (_, page) {
+                            itemCount: _layout.pages.length + 2,
+                            itemBuilder: (_, index) {
+                              if (index == 0) {
+                                return RepaintBoundary(
+                                  child: TodayView(state: _state, editing: _editing, onSearch: _openSearch, onEdit: () => _setEditing(true)),
+                                );
+                              }
+                              final page = index - 1;
                               if (page == _layout.pages.length && !_editing) {
                                 return RepaintBoundary(
                                   child: Padding(
@@ -1053,7 +1042,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ValueListenableBuilder<double>(
                           valueListenable: _position,
                           builder: (_, position, child) {
-                            final visible = _editing ? 1.0 : (lastPage + 1 - position).clamp(0.0, 1.0);
+                            // Neither the Today view nor the App Library has the dock.
+                            final visible = min(_editing ? 1.0 : lastPage + 1 - position, position + 1).clamp(0.0, 1.0);
                             final turning = (position - position.roundToDouble()).abs() > 0.01;
                             if (visible == 0) return const SizedBox();
                             return Opacity(
@@ -1064,7 +1054,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   Positioned(
                                     left: 0,
                                     right: 0,
-                                    bottom: p(12 + 92 + 13),
+                                    bottom: p(12 + 19) + p.dockHeight,
                                     child: Center(child: _editing || turning ? _dots(position) : _searchPill()),
                                   ),
                                   child!,
@@ -1176,7 +1166,7 @@ class _Labeled extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: sf(p(12), weight: 500, shadows: iconShadow),
+              style: sf(p(12.5), weight: 500, shadows: iconShadow),
             ),
           ),
       ],
@@ -1206,89 +1196,6 @@ class _Pill extends StatelessWidget {
             width: p(60),
             height: p(26),
             child: Icon(icon, size: p(17), color: Colors.white),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The sheet behind the plus of the iOS edit mode: every widget, shown as it will look.
-class WidgetGallery extends StatelessWidget {
-  const WidgetGallery({super.key, required this.state, required this.onPick, this.onPickApp, this.only});
-  final AppState state;
-
-  /// Shows only widgets of this size, for adding to a stack.
-  final WidgetSize? only;
-  final void Function(WidgetKind, WidgetSize) onPick;
-
-  /// With this the gallery also lists the widgets of the installed apps.
-  final void Function(WidgetProvider, WidgetSize)? onPickApp;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = Ios.of(context);
-    return Backdrop(
-      dim: 0.45,
-      // A tap between two widgets must not close it; swiping up or back does.
-      tapToClose: false,
-      child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(p(27), p(16), p(27), 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Widgets', style: sf(p(34), weight: 700)),
-              SizedBox(height: p(16)),
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.only(bottom: p(30)),
-                  physics: const BouncingScrollPhysics(),
-                  // Built ahead, so the list of apps is ready before it scrolls into view.
-                  scrollCacheExtent: ScrollCacheExtent.pixels(p(2400)),
-                  children: [
-                    for (final kind in WidgetKind.values)
-                      for (final size in kind.sizes)
-                        if (kind.builtIn && (only == null || size == only))
-                          GestureDetector(
-                            // The previews ignore touches, so the whole tile has to take the tap.
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {
-                              Navigator.of(context).pop();
-                              onPick(kind, size);
-                            },
-                            child: Padding(
-                              padding: EdgeInsets.only(bottom: p(24)),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SizedBox(
-                                    width: size.width == 4 ? p.fullWidth : p.smallWidth,
-                                    height: p.icon + (size.height - 1) * p.rowPitch,
-                                    child: IgnorePointer(
-                                      child: HomeWidget(kind: kind, size: size, state: state, scale: p.unit),
-                                    ),
-                                  ),
-                                  SizedBox(height: p(8)),
-                                  Text(kind.label, style: sf(p(15), weight: 600)),
-                                  Text(size.label, style: sf(p(13), color: Colors.white.withValues(alpha: 0.65))),
-                                ],
-                              ),
-                            ),
-                          ),
-                    if (onPickApp != null)
-                      AppWidgetList(
-                        state: state,
-                        only: only,
-                        onPick: (provider, size) {
-                          Navigator.of(context).pop();
-                          onPickApp!(provider, size);
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ],
           ),
         ),
       ),

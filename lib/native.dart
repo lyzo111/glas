@@ -6,7 +6,10 @@ import 'package:flutter/services.dart';
 import 'icons.dart';
 
 class AppInfo {
-  const AppInfo(this.package, this.activity, this.label, this.category);
+  const AppInfo(this.package, this.activity, this.label, this.category, [this.installed = 0]);
+
+  /// When it was installed, in milliseconds; 0 where Android doesn't say.
+  final int installed;
   final String package;
   final String activity;
   final String label;
@@ -153,7 +156,10 @@ class Native {
 
   static Future<List<AppInfo>> apps() async {
     final list = await _channel.invokeListMethod<Map>('apps') ?? [];
-    final apps = [for (final a in list) AppInfo(a['package'] as String, a['activity'] as String, a['label'] as String, a['category'] as String)];
+    final apps = [
+      for (final a in list)
+        AppInfo(a['package'] as String, a['activity'] as String, a['label'] as String, a['category'] as String, (a['installed'] as int?) ?? 0),
+    ];
     final defaultApps = await defaults();
     AppInfo.distinct = rolesTaken(apps.map((a) => a.package).toSet(), defaultApps.values.toSet());
     return apps..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));

@@ -1,13 +1,12 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'glass.dart';
 import 'layout.dart';
-import 'native.dart';
-import 'state.dart';
 
 /// A widget another app offers, as Android reports it.
 class WidgetProvider {
@@ -107,7 +106,7 @@ class AppWidgetView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.widgets_outlined, size: p(30), color: Colors.white.withValues(alpha: 0.85)),
+              Icon(CupertinoIcons.square_grid_2x2, size: p(30), color: Colors.white.withValues(alpha: 0.85)),
               SizedBox(height: p(6)),
               Text(item.title ?? item.kind.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(p(13), weight: 600)),
             ],
@@ -126,211 +125,6 @@ class AppWidgetView extends StatelessWidget {
             viewType: 'glas/appwidget',
             creationParams: {'id': id, 'width': box.maxWidth, 'height': box.maxHeight},
             creationParamsCodec: const StandardMessageCodec(),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The lower part of the widget gallery: every app that offers widgets, as in the iOS gallery.
-class AppWidgetList extends StatefulWidget {
-  const AppWidgetList({super.key, required this.state, required this.onPick, this.only});
-  final AppState state;
-
-  /// Lists only widgets that have room in this size, for adding to a stack.
-  final WidgetSize? only;
-  final void Function(WidgetProvider, WidgetSize) onPick;
-
-  @override
-  State<AppWidgetList> createState() => _AppWidgetListState();
-}
-
-class _AppWidgetListState extends State<AppWidgetList> with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
-  /// Providers by app, in the order of the apps' names; null while loading.
-  List<List<WidgetProvider>>? _apps;
-
-  @override
-  void initState() {
-    super.initState();
-    AppWidgets.providers().then((all) {
-      if (!mounted) return;
-      final byApp = <String, List<WidgetProvider>>{};
-      for (final provider in all) {
-        if (widget.only != null && !provider.sizes.contains(widget.only)) continue;
-        byApp.putIfAbsent(provider.package, () => []).add(provider);
-      }
-      setState(() => _apps = byApp.values.toList()..sort((a, b) => a.first.app.toLowerCase().compareTo(b.first.app.toLowerCase())));
-    });
-  }
-
-  Future<void> _open(List<WidgetProvider> app) async {
-    final picked = await openOverlay<(WidgetProvider, WidgetSize)>(context, (_) => _AppWidgetSheet(state: widget.state, providers: app, only: widget.only));
-    if (picked != null) widget.onPick(picked.$1, picked.$2);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final p = Ios.of(context);
-    final apps = _apps;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: EdgeInsets.only(top: p(6), bottom: p(12)),
-          child: Text('Apps', style: sf(p(22), weight: 700)),
-        ),
-        if (apps == null || apps.isEmpty)
-          Text(
-            apps == null ? 'Widgets werden geladen …' : 'Keine App auf diesem Gerät bietet Widgets an.',
-            style: sf(p(15), color: Colors.white.withValues(alpha: 0.65)),
-          )
-        else
-          Glass(
-            radius: p(22),
-            tint: 0.14,
-            blur: false,
-            child: Column(
-              children: [
-                for (final (index, app) in apps.indexed)
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _open(app),
-                    child: Column(
-                      children: [
-                        if (index > 0)
-                          Container(
-                            height: 0.5,
-                            margin: EdgeInsets.only(left: p(66)),
-                            color: Colors.white.withValues(alpha: 0.2),
-                          ),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: p(14), vertical: p(9)),
-                          child: Row(
-                            children: [
-                              AppIcon(app: _appOf(app.first.package), size: p(38)),
-                              SizedBox(width: p(14)),
-                              Expanded(
-                                child: Text(app.first.app, maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(p(17))),
-                              ),
-                              Text('${app.length}', style: sf(p(15), color: Colors.white.withValues(alpha: 0.55))),
-                              SizedBox(width: p(4)),
-                              Icon(Icons.chevron_right_rounded, size: p(22), color: Colors.white.withValues(alpha: 0.45)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  AppInfo? _appOf(String package) {
-    for (final app in widget.state.apps.values) {
-      if (app.package == package) return app;
-    }
-    return null;
-  }
-}
-
-/// The widgets of one app, each with the sizes it has room in.
-class _AppWidgetSheet extends StatelessWidget {
-  const _AppWidgetSheet({required this.state, required this.providers, this.only});
-  final AppState state;
-  final WidgetSize? only;
-  final List<WidgetProvider> providers;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = Ios.of(context);
-    return Backdrop(
-      dim: 0.5,
-      tapToClose: false,
-      child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(p(27), p(16), p(27), 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Padding(
-                      padding: EdgeInsets.only(right: p(10), top: p(6), bottom: p(6)),
-                      child: Icon(Icons.chevron_left_rounded, size: p(30), color: Colors.white),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(providers.first.app, maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(p(28), weight: 700)),
-                  ),
-                ],
-              ),
-              SizedBox(height: p(14)),
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.only(bottom: p(30)),
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    for (final provider in providers)
-                      Padding(
-                        padding: EdgeInsets.only(bottom: p(26)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => Navigator.of(context).pop((provider, only ?? provider.preferred)),
-                              child: Container(
-                                height: p(150),
-                                alignment: Alignment.centerLeft,
-                                child: FutureBuilder(
-                                  future: AppWidgets.preview(provider.id),
-                                  builder: (_, image) => image.data == null
-                                      ? const SizedBox()
-                                      : ClipRRect(
-                                          borderRadius: BorderRadius.circular(p(18)),
-                                          child: Image.memory(image.data!, fit: BoxFit.contain, filterQuality: FilterQuality.medium, gaplessPlayback: true),
-                                        ),
-                                ),
-                              ),
-                            ),
-                            SizedBox(height: p(8)),
-                            Text(provider.label, style: sf(p(15), weight: 600)),
-                            SizedBox(height: p(8)),
-                            Wrap(
-                              spacing: p(8),
-                              children: [
-                                for (final size in only == null ? provider.sizes : [only!])
-                                  GestureDetector(
-                                    onTap: () => Navigator.of(context).pop((provider, size)),
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(horizontal: p(14), vertical: p(7)),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: size == (only ?? provider.preferred) ? 0.3 : 0.14),
-                                        borderRadius: BorderRadius.circular(p(16)),
-                                      ),
-                                      child: Text(size.label, style: sf(p(14), weight: 600)),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
           ),
         ),
       ),

@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:ui';
 import 'dart:ui' as ui;
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -19,13 +20,16 @@ class Ios {
   final double unit;
   double call(double points) => points * unit;
 
-  double get icon => 60 * unit;
-  double get margin => 27 * unit;
-  double get columnPitch => 93 * unit;
-  double get rowPitch => 98 * unit;
-  double get gridTop => 73 * unit;
+  // Measured on an iOS 26 home screen: its icons are a little larger and closer together
+  // than the 60 pt ones before it.
+  double get icon => 64 * unit;
+  double get margin => 28.5 * unit;
+  double get columnPitch => 90.5 * unit;
+  double get rowPitch => 98.5 * unit;
+  double get gridTop => 67 * unit;
   double get widgetGap => 22 * unit;
-  double get fullWidth => 339 * unit;
+  double get fullWidth => 335.5 * unit;
+  double get dockHeight => 96 * unit;
   double get smallWidth => (fullWidth - widgetGap) / 2;
 }
 
@@ -405,7 +409,7 @@ class StatusRow extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (status.cellular) ...[SignalGlyph(height: p(11.5)), SizedBox(width: p(5))],
-                  if (status.wifi) ...[Icon(Icons.wifi_rounded, color: Colors.white, size: p(17.5)), SizedBox(width: p(5))],
+                  if (status.wifi) ...[Icon(CupertinoIcons.wifi, color: Colors.white, size: p(17.5)), SizedBox(width: p(5))],
                   BatteryGlyph(level: status.battery, charging: status.charging),
                 ],
               ),
@@ -442,9 +446,12 @@ class _Signal extends CustomPainter {
 
 /// The filled iOS battery with the percentage cut into it.
 class BatteryGlyph extends StatelessWidget {
-  const BatteryGlyph({super.key, required this.level, required this.charging});
+  const BatteryGlyph({super.key, required this.level, required this.charging, this.plain = false});
   final int level;
   final bool charging;
+
+  /// Without the number, where the percentage stands next to it.
+  final bool plain;
 
   @override
   Widget build(BuildContext context) {
@@ -471,9 +478,10 @@ class BatteryGlyph extends StatelessWidget {
                 widthFactor: level.clamp(6, 100) / 100,
                 child: ColoredBox(color: fill),
               ),
-              Center(
-                child: Text('$level', style: sf(p(10.5), weight: 700, color: dark, height: 1, tracking: -0.02)),
-              ),
+              if (!plain)
+                Center(
+                  child: Text('$level', style: sf(p(10.5), weight: 700, color: dark, height: 1, tracking: -0.02)),
+                ),
             ],
           ),
         ),
@@ -516,7 +524,7 @@ const iconTints = [0xFFD6D6DB, 0xFF64D2FF, 0xFF0A84FF, 0xFF5E5CE6, 0xFFFF375F, 0
 
 /// The pane of a glass icon or widget. A live blur behind each one would cost a render pass
 /// apiece, so the pane is a see-through sheet and the rim does the rest.
-BoxDecoration glassPane(IconStyle look) {
+BoxDecoration glassPane(IconStyle look, {double strength = 1}) {
   final dark = IconStyle.darkGlass;
   final tint = IconStyle.tint;
   final colors = switch (look) {
@@ -529,8 +537,36 @@ BoxDecoration glassPane(IconStyle look) {
     _ => [Colors.white.withValues(alpha: 0.4), Colors.white.withValues(alpha: 0.22)],
   };
   return BoxDecoration(
-    gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: colors),
+    gradient: LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [for (final color in colors) color.withValues(alpha: color.a * strength)],
+    ),
   );
+}
+
+/// The tile of a folder or of a group in the App Library. In the glass styles it is a pane in
+/// the colour of the icons, a little thinner so the icons on it stand out; otherwise it is
+/// the frosted grey of iOS.
+class FolderPane extends StatelessWidget {
+  const FolderPane({super.key, required this.radius, required this.child});
+  final double radius;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final look = IconStyle.current;
+    if (!look.glass) {
+      return Glass(radius: radius, tint: look == IconStyle.dark ? 0.34 : 0.24, dark: look == IconStyle.dark, blur: false, child: child);
+    }
+    return ClipRSuperellipse(
+      borderRadius: BorderRadius.circular(radius),
+      child: CustomPaint(
+        foregroundPainter: GlassEdge(radius, strength: 0.8),
+        child: DecoratedBox(decoration: glassPane(look, strength: 0.62), child: child),
+      ),
+    );
+  }
 }
 
 /// The colour of what is drawn on a [glassPane].
@@ -679,8 +715,12 @@ class AppIcon extends StatelessWidget {
                 height: size * 0.38,
                 alignment: Alignment.center,
                 padding: EdgeInsets.symmetric(horizontal: size * 0.1),
-                decoration: BoxDecoration(color: const Color(0xFFFF3B30), borderRadius: BorderRadius.circular(size * 0.19)),
-                child: Text('$badge', style: sf(size * 0.24, weight: 500, height: 1)),
+                // Red, and in the glass styles the pale disc iOS puts there instead.
+                decoration: BoxDecoration(
+                  color: look.glass ? const Color(0xFFE8ECF2) : const Color(0xFFFF3B30),
+                  borderRadius: BorderRadius.circular(size * 0.19),
+                ),
+                child: Text('$badge', style: sf(size * 0.24, weight: 500, height: 1, color: look.glass ? const Color(0xFF3A3A3C) : Colors.white)),
               ),
             ),
         ],
@@ -729,15 +769,15 @@ class AlertCard extends StatelessWidget {
     final when = age.inMinutes < 1
         ? 'Jetzt'
         : age.inHours < 1
-        ? 'vor ${age.inMinutes} Min.'
+        ? 'Vor ${age.inMinutes} Min.'
         : age.inDays < 1
-        ? 'vor ${age.inHours} Std.'
-        : 'vor ${age.inDays} T.';
+        ? 'Vor ${age.inHours} Std.'
+        : 'Vor ${age.inDays} T.';
     final card = Glass(
-      radius: p(26),
-      tint: 0.2,
+      radius: p(28),
+      tint: 0.16,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(p(14), p(13), p(16), p(13)),
+        padding: EdgeInsets.fromLTRB(p(14), p(13), p(17), p(13)),
         child: Row(
           children: [
             if (alert.avatar != null)
@@ -763,7 +803,7 @@ class AlertCard extends StatelessWidget {
             else
               SizedBox.square(
                 dimension: p(40),
-                child: Icon(Icons.notifications, color: Colors.white, size: p(26)),
+                child: Icon(CupertinoIcons.bell_fill, color: Colors.white, size: p(26)),
               ),
             SizedBox(width: p(12)),
             Expanded(
@@ -773,13 +813,13 @@ class AlertCard extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(alert.title ?? alert.app, maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(p(15), weight: 600)),
+                        child: Text(alert.title ?? alert.app, maxLines: 1, overflow: TextOverflow.ellipsis, style: sf(p(16), weight: 600)),
                       ),
                       SizedBox(width: p(8)),
-                      Text(when, style: sf(p(13), color: Colors.white.withValues(alpha: 0.7))),
+                      Text(when, style: sf(p(14), color: Colors.white.withValues(alpha: 0.6))),
                     ],
                   ),
-                  if (alert.text != null) Text(alert.text!, maxLines: 2, overflow: TextOverflow.ellipsis, style: sf(p(15), height: 1.25)),
+                  if (alert.text != null) Text(alert.text!, maxLines: 2, overflow: TextOverflow.ellipsis, style: sf(p(16), height: 1.25)),
                   if (alert.canReply)
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
@@ -894,7 +934,7 @@ class _ReplySheetState extends State<_ReplySheet> {
                   ),
                 ),
               ),
-              IconButton(onPressed: _send, color: const Color(0xFF0A84FF), iconSize: p(30), icon: const Icon(Icons.arrow_circle_up_rounded)),
+              IconButton(onPressed: _send, color: const Color(0xFF0A84FF), iconSize: p(30), icon: const Icon(CupertinoIcons.arrow_up_circle_fill)),
             ],
           ),
         ),
@@ -929,9 +969,9 @@ class MediaControls extends StatelessWidget {
             ],
           ),
         ),
-        button(Icons.fast_rewind_rounded, 'previous', 30),
-        button(media.playing ? Icons.pause_rounded : Icons.play_arrow_rounded, 'toggle', 36),
-        button(Icons.fast_forward_rounded, 'next', 30),
+        button(CupertinoIcons.backward_fill, 'previous', 30),
+        button(media.playing ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill, 'toggle', 36),
+        button(CupertinoIcons.forward_fill, 'next', 30),
       ],
     );
   }
