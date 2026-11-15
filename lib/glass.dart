@@ -310,8 +310,11 @@ String dateText(DateTime t) => '${weekdays[t.weekday - 1]}, ${t.day}. ${months[t
 
 /// Rebuilds when the minute changes.
 class Ticker extends StatefulWidget {
-  const Ticker({super.key, required this.builder});
+  const Ticker({super.key, required this.builder, this.seconds = false});
   final Widget Function(BuildContext, DateTime) builder;
+
+  /// Every second instead, for a second hand.
+  final bool seconds;
 
   @override
   State<Ticker> createState() => _TickerState();
@@ -327,7 +330,8 @@ class _TickerState extends State<Ticker> {
   }
 
   void _schedule() {
-    _timer = Timer(Duration(seconds: 60 - DateTime.now().second), () {
+    final now = DateTime.now();
+    _timer = Timer(widget.seconds ? Duration(milliseconds: 1000 - now.millisecond) : Duration(seconds: 60 - now.second), () {
       if (!mounted) return;
       setState(() {});
       _schedule();

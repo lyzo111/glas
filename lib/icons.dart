@@ -95,8 +95,12 @@ class RoleIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (role == Role.calendar || role == Role.clock) {
-      return Ticker(
-        builder: (_, now) => CustomPaint(size: Size.square(size), painter: _RolePainter(role, now, dark)),
+      // The clock has a second hand, so it is drawn anew each second, on a layer of its own.
+      return RepaintBoundary(
+        child: Ticker(
+          seconds: role == Role.clock,
+          builder: (_, now) => CustomPaint(size: Size.square(size), painter: _RolePainter(role, now, dark)),
+        ),
       );
     }
     return RepaintBoundary(
