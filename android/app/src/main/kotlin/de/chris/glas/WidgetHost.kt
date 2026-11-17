@@ -46,6 +46,9 @@ class WidgetHost(private val activity: Activity, messenger: BinaryMessenger) {
     private var pending: MethodChannel.Result? = null
     private var pendingId = AppWidgetManager.INVALID_APPWIDGET_ID
 
+    /** Widgets already asked for their content since Glas started. */
+    private val nudged = HashSet<Int>()
+
     val factory: PlatformViewFactory = object : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
         override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
             val params = args as? Map<*, *>
@@ -205,6 +208,7 @@ class WidgetHost(private val activity: Activity, messenger: BinaryMessenger) {
     /** [width] and [height] are the widget's place on the home screen in dp. */
     private fun widgetView(id: Int, width: Float, height: Float): View {
         val info = manager.getAppWidgetInfo(id) ?: return missing()
+        nudge(id, info)
         return try {
             host.createView(activity, id, info).apply {
                 setPadding(0, 0, 0, 0)
@@ -219,6 +223,24 @@ class WidgetHost(private val activity: Activity, messenger: BinaryMessenger) {
             }
         } catch (e: RuntimeException) {
             missing()
+        }
+    }
+
+    /**
+     * Asks the widget's app to draw it. Android does so when a widget is bound, but some apps,
+     * YouTube Music among them, then wait for their next round of updates and leave the new
+     * widget empty until another one of theirs is added. Once per widget and start of Glas.
+     */
+    private fun nudge(id: Int, info: AppWidgetProviderInfo) {
+        if (!nudged.add(id)) return
+        try {
+            activity.sendBroadcast(
+                Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                    .setComponent(info.provider)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(id)),
+            )
+        } catch (e: RuntimeException) {
+            // Its app may not take the request; the widget then fills in on its own schedule.
         }
     }
 
