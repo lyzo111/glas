@@ -134,6 +134,11 @@ class Native {
   static void init() {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'tilt') return _tilted(call.arguments as List);
+      if (call.method == 'appsUpdated') {
+        _forgetPackages((call.arguments as List).cast<String>());
+        _events.add('apps');
+        return;
+      }
       _events.add(call.method);
     });
   }
@@ -178,6 +183,14 @@ class Native {
   /// Fetches icons anew, but keeps showing the ones already loaded meanwhile. Android reports
   /// app changes often, and clearing them made the whole home screen reload its icons.
   static void forgetIcons() => _icons.clear();
+
+  /// An installed or updated app may have a new icon. The bytes shown so far must go too:
+  /// [iconNow] would otherwise keep showing the old icon until Glas restarts.
+  static void _forgetPackages(List<String> packages) {
+    bool stale(String key) => packages.any((p) => key.startsWith('$p/'));
+    _icons.removeWhere((key, _) => stale(key));
+    _loaded.removeWhere((key, _) => stale(key));
+  }
 
   /// [origin] is the icon's rectangle in physical pixels.
   static Future<void> launch(AppInfo app, Rect? origin) => _channel.invokeMethod('launch', {

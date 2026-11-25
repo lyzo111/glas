@@ -80,9 +80,10 @@ class Bridge(
 
     private val appChanges = object : LauncherApps.Callback() {
         override fun onPackageRemoved(packageName: String, user: UserHandle) = notifyDart("apps")
-        override fun onPackageAdded(packageName: String, user: UserHandle) = notifyDart("apps")
-        override fun onPackageChanged(packageName: String, user: UserHandle) = notifyDart("apps")
-        override fun onPackagesAvailable(names: Array<out String>, user: UserHandle, replacing: Boolean) = notifyDart("apps")
+        // An update can bring a new icon, so Dart has to drop the one it holds for these packages.
+        override fun onPackageAdded(packageName: String, user: UserHandle) = appsUpdated(listOf(packageName))
+        override fun onPackageChanged(packageName: String, user: UserHandle) = appsUpdated(listOf(packageName))
+        override fun onPackagesAvailable(names: Array<out String>, user: UserHandle, replacing: Boolean) = appsUpdated(names.toList())
         override fun onPackagesUnavailable(names: Array<out String>, user: UserHandle, replacing: Boolean) = notifyDart("apps")
     }
 
@@ -160,6 +161,10 @@ class Bridge(
 
     fun notifyDart(event: String) {
         main.post { channel.invokeMethod(event, null) }
+    }
+
+    private fun appsUpdated(packages: List<String>) {
+        main.post { channel.invokeMethod("appsUpdated", packages) }
     }
 
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
